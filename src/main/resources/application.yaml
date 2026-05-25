@@ -1,9 +1,29 @@
 spring:
   application:
     name: stockmarket
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
-      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
-      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
-      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+
+  # 1. PostgreSQL & JPA (영구 저장소) 설정
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate # 이미 도커로 schema.sql을 주입했으므로 검증만 수행 (안전)
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # 2. Redis (초고속 캐시/전광판) 설정
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+
+# 3. Kafka 자동설정은 일단 인프라 띄우기 전까지 주석 처리하거나 exclude에 남겨둘 수 있어.
+# 지금은 완전히 빈틈없이 인프라를 붙이기 위해 kafka 관련 exclude만 남기거나 
+# 추후 셋업할 예정이므로 일단 이대로 쾌적하게 시작하자!
