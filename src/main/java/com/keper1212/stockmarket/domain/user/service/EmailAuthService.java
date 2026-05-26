@@ -29,6 +29,7 @@ import org.springframework.util.StringUtils;
 public class EmailAuthService {
 
     private static final String EMAIL_CODE_KEY_PREFIX = "auth:email:";
+    private static final String EMAIL_VERIFIED_KEY_PREFIX = "auth:email:verified:";
     private static final String MAIL_SUBJECT = "[StockMarket] 이메일 인증번호 안내";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final DefaultRedisScript<Long> VERIFY_AND_DELETE_SCRIPT = new DefaultRedisScript<>(
@@ -55,6 +56,9 @@ public class EmailAuthService {
 
     @Value("${app.auth.email.code-ttl-seconds}")
     private long codeTtlSeconds;
+
+    @Value("${app.auth.email.verified-ttl-seconds}")
+    private long verifiedTtlSeconds;
 
     @Value("${spring.mail.host}")
     private String mailHost;
@@ -102,6 +106,10 @@ public class EmailAuthService {
         if (result == 0L) {
             throw new EmailVerificationException(HttpStatus.BAD_REQUEST, "인증번호가 일치하지 않습니다.");
         }
+
+        String verifiedKey = EMAIL_VERIFIED_KEY_PREFIX + email;
+        stringRedisTemplate.opsForValue().set(verifiedKey, "true", Duration.ofSeconds(verifiedTtlSeconds));
+
         return EmailCodeVerifyResponse.verified();
     }
 

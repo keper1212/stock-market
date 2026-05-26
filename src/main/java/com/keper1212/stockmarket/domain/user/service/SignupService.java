@@ -5,8 +5,11 @@ import com.keper1212.stockmarket.domain.user.controller.dto.SignupRequest;
 import com.keper1212.stockmarket.domain.user.controller.dto.SignupResponse;
 import com.keper1212.stockmarket.domain.user.entity.User;
 import com.keper1212.stockmarket.domain.user.repository.UserRepository;
+import com.keper1212.stockmarket.global.error.AuthException;
 import com.keper1212.stockmarket.global.error.DuplicateEmailException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,13 +21,21 @@ public class SignupService {
 
     private static final int MAX_NAME_LENGTH = 50;
     private static final String DEFAULT_NAME = "user";
+    private static final String EMAIL_VERIFIED_KEY_PREFIX = "auth:email:verified:";
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final StringRedisTemplate stringRedisTemplate;
 
     @Transactional
     public SignupResponse signup(SignupRequest request) {
         String email = request.email().trim().toLowerCase();
+        String verifiedKey = EMAIL_VERIFIED_KEY_PREFIX + email;
+
+        Boolean isVerified = stringRedisTemplate.hasKey(verifiedKey);
+        if (!Boolean.TRUE.equals(isVerified)) {
+            throw new AuthException(HttpStatus.FORBIDDEN, "이메일 인증이 완료된 사용자만 가입할 수 있습니다.");
+        }
 
         if (userRepository.existsByEmail(email)) {
             throw new DuplicateEmailException("이미 가입된 이메일입니다.");
@@ -38,6 +49,7 @@ public class SignupService {
         user.setAccount(account);
 
         User savedUser = userRepository.save(user);
+        stringRedisTemplate.delete(verifiedKey);
         return SignupResponse.created(savedUser.getUserId());
     }
 

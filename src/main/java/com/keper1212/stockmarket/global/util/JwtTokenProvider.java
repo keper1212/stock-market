@@ -26,13 +26,12 @@ public class JwtTokenProvider {
         this.refreshTokenValiditySeconds = refreshTokenValiditySeconds;
     }
 
-    public String generateAccessToken(Long userId, String email) {
+    public String generateAccessToken(Long userId) {
         Instant now = Instant.now();
         Instant expiry = now.plusSeconds(accessTokenValiditySeconds);
 
         return Jwts.builder()
                 .subject(userId.toString())
-                .claim("email", email)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiry))
                 .signWith(signingKey)

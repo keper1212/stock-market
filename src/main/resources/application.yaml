@@ -40,6 +40,7 @@ app:
     email:
       from: ${MAIL_FROM}
       code-ttl-seconds: ${AUTH_EMAIL_CODE_TTL_SECONDS}
+      verified-ttl-seconds: ${AUTH_EMAIL_VERIFIED_TTL_SECONDS}
     jwt:
       secret-key: ${JWT_SECRET_KEY}
       access-token-validity-seconds: ${AUTH_ACCESS_TOKEN_VALIDITY_SECONDS}

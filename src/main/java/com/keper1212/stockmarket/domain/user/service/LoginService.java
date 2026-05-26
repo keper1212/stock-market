@@ -35,7 +35,7 @@ public class LoginService {
             throw new AuthException(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다.");
         }
 
-        String accessToken = jwtTokenProvider.generateAccessToken(user.getUserId(), user.getEmail());
+        String accessToken = jwtTokenProvider.generateAccessToken(user.getUserId());
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getUserId());
         long refreshTokenTtlSeconds = jwtTokenProvider.getRefreshTokenValiditySeconds();
 
