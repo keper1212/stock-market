@@ -1,5 +1,7 @@
 package com.keper1212.stockmarket.global.util;
 
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
@@ -52,5 +54,18 @@ public class JwtTokenProvider {
 
     public long getRefreshTokenValiditySeconds() {
         return refreshTokenValiditySeconds;
+    }
+
+    public Long getUserIdFromToken(String token) {
+        Claims claims = parseClaims(token);
+        return Long.parseLong(claims.getSubject());
+    }
+
+    private Claims parseClaims(String token) throws JwtException {
+        return Jwts.parser()
+                .verifyWith(signingKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
     }
 }

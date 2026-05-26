@@ -6,11 +6,15 @@ import com.keper1212.stockmarket.domain.user.controller.dto.EmailCodeVerifyReque
 import com.keper1212.stockmarket.domain.user.controller.dto.EmailCodeVerifyResponse;
 import com.keper1212.stockmarket.domain.user.controller.dto.LoginRequest;
 import com.keper1212.stockmarket.domain.user.controller.dto.LoginResponse;
+import com.keper1212.stockmarket.domain.user.controller.dto.RefreshTokenResponse;
 import com.keper1212.stockmarket.domain.user.controller.dto.SignupRequest;
 import com.keper1212.stockmarket.domain.user.controller.dto.SignupResponse;
 import com.keper1212.stockmarket.domain.user.service.EmailAuthService;
 import com.keper1212.stockmarket.domain.user.service.LoginService;
+import com.keper1212.stockmarket.domain.user.service.RefreshTokenService;
 import com.keper1212.stockmarket.domain.user.service.SignupService;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,6 +34,7 @@ public class AuthController {
     private final SignupService signupService;
     private final EmailAuthService emailAuthService;
     private final LoginService loginService;
+    private final RefreshTokenService refreshTokenService;
 
     @Value("${app.auth.jwt.refresh-cookie-name}")
     private String refreshCookieName;
@@ -69,9 +74,30 @@ public class AuthController {
                 .body(loginResult.response());
     }
 
+    @PostMapping("/refresh")
+    public ResponseEntity<RefreshTokenResponse> refresh(HttpServletRequest httpServletRequest) {
+        String refreshToken = extractRefreshTokenFromCookie(httpServletRequest);
+        RefreshTokenResponse response = refreshTokenService.refreshAccessToken(refreshToken);
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/signup")
     public ResponseEntity<SignupResponse> signup(@Valid @RequestBody SignupRequest request) {
         SignupResponse response = signupService.signup(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    private String extractRefreshTokenFromCookie(HttpServletRequest httpServletRequest) {
+        Cookie[] cookies = httpServletRequest.getCookies();
+        if (cookies == null) {
+            return null;
+        }
+
+        for (Cookie cookie : cookies) {
+            if (refreshCookieName.equals(cookie.getName())) {
+                return cookie.getValue();
+            }
+        }
+        return null;
     }
 }
