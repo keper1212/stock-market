@@ -38,3 +38,5 @@ out/
 
 .env
 .gradle-local/
+
+schema_modify.sql

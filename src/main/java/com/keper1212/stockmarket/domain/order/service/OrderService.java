@@ -10,7 +10,6 @@ import com.keper1212.stockmarket.domain.order.entity.OutboxEvent;
 import com.keper1212.stockmarket.domain.order.repository.OrderRepository;
 import com.keper1212.stockmarket.domain.order.repository.OutboxEventRepository;
 import com.keper1212.stockmarket.domain.order.repository.StockOrderValidationRepository;
-import com.keper1212.stockmarket.domain.userservice.entity.Account;
 import com.keper1212.stockmarket.domain.userservice.entity.User;
 import com.keper1212.stockmarket.domain.userservice.repository.AccountRepository;
 import com.keper1212.stockmarket.domain.userservice.repository.UserRepository;
@@ -63,7 +62,7 @@ public class OrderService {
         long price = request.price();
         long quantity = request.quantity();
 
-        validateBalance(userId, request.orderType(), stockCode, price, quantity);
+        reserveResources(userId, request.orderType(), stockCode, price, quantity);
 
         OffsetDateTime acceptedAt = OffsetDateTime.now(ZoneOffset.UTC);
         UUID orderId = UUID.randomUUID();
@@ -112,20 +111,22 @@ public class OrderService {
         return OrderCreateResponse.accepted(orderId, acceptedAt);
     }
 
-    private void validateBalance(Long userId, OrderType orderType, String stockCode, long price, long quantity) {
+    private void reserveResources(Long userId, OrderType orderType, String stockCode, long price, long quantity) {
         if (orderType == OrderType.BUY) {
-            Account account = accountRepository.findByUser_UserId(userId)
-                    .orElseThrow(() -> new OrderException(HttpStatus.NOT_FOUND, "계좌 정보가 존재하지 않습니다."));
+            if (!accountRepository.existsByUser_UserId(userId)) {
+                throw new OrderException(HttpStatus.NOT_FOUND, "계좌 정보가 존재하지 않습니다.");
+            }
 
-            long requiredAmount = multiplyExact(price, quantity);
-            if (account.getCashBalance() < requiredAmount) {
+            long lockAmount = multiplyExact(price, quantity);
+            int updatedRows = accountRepository.lockCashByUserIdIfAvailable(userId, lockAmount);
+            if (updatedRows == 0) {
                 throw new OrderException(HttpStatus.UNPROCESSABLE_ENTITY, "예수금이 부족합니다.");
             }
             return;
         }
 
-        long holdingQuantity = userStockRepository.findQuantityByUserIdAndStockCode(userId, stockCode).orElse(0L);
-        if (holdingQuantity < quantity) {
+        int updatedRows = userStockRepository.lockQuantityByUserIdAndStockCodeIfAvailable(userId, stockCode, quantity);
+        if (updatedRows == 0) {
             throw new OrderException(HttpStatus.UNPROCESSABLE_ENTITY, "보유 수량이 부족합니다.");
         }
     }

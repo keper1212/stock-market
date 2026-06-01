@@ -32,6 +32,9 @@ public class Account {
     @Column(name = "cash_balance", nullable = false)
     private long cashBalance;
 
+    @Column(name = "locked_cash", nullable = false)
+    private long lockedCash;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -41,13 +44,14 @@ public class Account {
     protected Account() {
     }
 
-    private Account(User user, long cashBalance) {
+    private Account(User user, long cashBalance, long lockedCash) {
         this.user = user;
         this.cashBalance = cashBalance;
+        this.lockedCash = lockedCash;
     }
 
     public static Account createInitial(User user) {
-        return new Account(user, INITIAL_CASH_BALANCE);
+        return new Account(user, INITIAL_CASH_BALANCE, 0L);
     }
 
     @PrePersist
@@ -64,5 +68,9 @@ public class Account {
 
     public long getCashBalance() {
         return cashBalance;
+    }
+
+    public long getLockedCash() {
+        return lockedCash;
     }
 }

@@ -33,6 +33,9 @@ public class UserStock {
     @Column(name = "quantity", nullable = false)
     private long quantity;
 
+    @Column(name = "locked_quantity", nullable = false)
+    private long lockedQuantity;
+
     @Column(name = "average_cost", nullable = false)
     private double averageCost;
 

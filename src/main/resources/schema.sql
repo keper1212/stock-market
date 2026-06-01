@@ -13,9 +13,12 @@ CREATE TABLE accounts (
     account_id BIGSERIAL PRIMARY KEY,
     user_id BIGINT UNIQUE NOT NULL,
     cash_balance BIGINT NOT NULL DEFAULT 10000000, -- 초기 가상 자산 1천만 원
+    locked_cash BIGINT NOT NULL DEFAULT 0, -- 미체결 매수 주문으로 잠긴 예수금
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_accounts_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+    CONSTRAINT fk_accounts_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    CONSTRAINT chk_accounts_locked_cash CHECK (locked_cash >= 0),
+    CONSTRAINT chk_accounts_cash_balance CHECK (cash_balance >= 0)
 );
 
 -- 3. Stocks (상장 주식 마스터 테이블)
@@ -34,12 +37,15 @@ CREATE TABLE user_stocks (
     user_id BIGINT NOT NULL,
     stock_code VARCHAR(20) NOT NULL,
     quantity BIGINT NOT NULL DEFAULT 0,
+    locked_quantity BIGINT NOT NULL DEFAULT 0, -- 미체결 매도 주문으로 잠긴 수량
     average_cost DOUBLE PRECISION NOT NULL DEFAULT 0.0,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_user_stocks_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
     CONSTRAINT fk_user_stocks_code FOREIGN KEY (stock_code) REFERENCES stocks(stock_code) ON DELETE CASCADE,
-    CONSTRAINT uq_user_stock_pair UNIQUE (user_id, stock_code) -- 복합 유니크 제약조건 (내부 인덱스 자동 생성)
+    CONSTRAINT uq_user_stock_pair UNIQUE (user_id, stock_code), -- 복합 유니크 제약조건 (내부 인덱스 자동 생성)
+    CONSTRAINT chk_user_stocks_quantity CHECK (quantity >= 0),
+    CONSTRAINT chk_user_stocks_locked_quantity CHECK (locked_quantity >= 0 AND locked_quantity <= quantity)
 );
 
 -- 5. Orders (주문 원장 테이블: 접수/부분체결/완전체결/취소 상태 추적)
