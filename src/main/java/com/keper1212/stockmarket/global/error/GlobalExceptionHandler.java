@@ -25,7 +25,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErrorResponse.of("이미 가입된 이메일입니다."));
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErrorResponse.of("데이터 무결성 제약조건을 위반했습니다."));
     }
 
     @ExceptionHandler(EmailRequestException.class)
@@ -40,6 +40,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AuthException.class)
     public ResponseEntity<ErrorResponse> handleAuthException(AuthException e) {
+        return ResponseEntity.status(e.getHttpStatus()).body(ErrorResponse.of(e.getMessage()));
+    }
+
+    @ExceptionHandler(OrderException.class)
+    public ResponseEntity<ErrorResponse> handleOrderException(OrderException e) {
         return ResponseEntity.status(e.getHttpStatus()).body(ErrorResponse.of(e.getMessage()));
     }
 }

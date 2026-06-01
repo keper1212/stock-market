@@ -23,6 +23,14 @@ public interface UserStockRepository extends JpaRepository<UserStock, Long> {
             """, nativeQuery = true)
     List<UserStockAssetView> findHoldingStocksByUserId(@Param("userId") Long userId);
 
+    @Query(value = """
+            SELECT us.quantity
+            FROM user_stocks us
+            WHERE us.user_id = :userId
+              AND us.stock_code = :stockCode
+            """, nativeQuery = true)
+    java.util.Optional<Long> findQuantityByUserIdAndStockCode(@Param("userId") Long userId, @Param("stockCode") String stockCode);
+
     interface UserStockAssetView {
         String getStockCode();
 

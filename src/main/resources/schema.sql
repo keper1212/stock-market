@@ -42,20 +42,76 @@ CREATE TABLE user_stocks (
     CONSTRAINT uq_user_stock_pair UNIQUE (user_id, stock_code) -- 복합 유니크 제약조건 (내부 인덱스 자동 생성)
 );
 
--- 5. Trades (최종 체결 내역/영수증 테이블)
+-- 5. Orders (주문 원장 테이블: 접수/부분체결/완전체결/취소 상태 추적)
+CREATE TABLE orders (
+    order_id UUID PRIMARY KEY, -- 애플리케이션에서 UUID 생성
+    user_id BIGINT NOT NULL,
+    stock_code VARCHAR(20) NOT NULL,
+    client_order_id VARCHAR(100) NOT NULL, -- 멱등키 (사용자별 유니크)
+    order_type VARCHAR(4) NOT NULL, -- BUY / SELL
+    price BIGINT NOT NULL, -- 지정가 (원)
+    quantity BIGINT NOT NULL, -- 원주문 수량
+    remaining_quantity BIGINT NOT NULL, -- 미체결 잔량
+    status VARCHAR(20) NOT NULL, -- ACCEPTED / PARTIALLY_FILLED / FILLED / CANCELED / REJECTED
+    accepted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), -- 서버 접수 시각
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(user_id),
+    CONSTRAINT fk_orders_stock FOREIGN KEY (stock_code) REFERENCES stocks(stock_code),
+    CONSTRAINT uq_orders_user_client_order UNIQUE (user_id, client_order_id),
+    CONSTRAINT chk_orders_type CHECK (order_type IN ('BUY', 'SELL')),
+    CONSTRAINT chk_orders_price CHECK (price > 0),
+    CONSTRAINT chk_orders_quantity CHECK (quantity > 0),
+    CONSTRAINT chk_orders_remaining_quantity CHECK (remaining_quantity >= 0 AND remaining_quantity <= quantity),
+    CONSTRAINT chk_orders_status CHECK (status IN ('ACCEPTED', 'PARTIALLY_FILLED', 'FILLED', 'CANCELED', 'REJECTED'))
+);
+
+-- 6. Trades (최종 체결 내역/영수증 테이블)
 CREATE TABLE trades (
     trade_id BIGSERIAL PRIMARY KEY,
     stock_code VARCHAR(20) NOT NULL,
     buyer_id BIGINT NOT NULL,
     seller_id BIGINT NOT NULL,
+    buy_order_id UUID,
+    sell_order_id UUID,
     trade_price BIGINT NOT NULL,
     trade_quantity BIGINT NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_trades_code FOREIGN KEY (stock_code) REFERENCES stocks(stock_code),
     CONSTRAINT fk_trades_buyer FOREIGN KEY (buyer_id) REFERENCES users(user_id),
-    CONSTRAINT fk_trades_seller FOREIGN KEY (seller_id) REFERENCES users(user_id)
+    CONSTRAINT fk_trades_seller FOREIGN KEY (seller_id) REFERENCES users(user_id),
+    CONSTRAINT fk_trades_buy_order FOREIGN KEY (buy_order_id) REFERENCES orders(order_id),
+    CONSTRAINT fk_trades_sell_order FOREIGN KEY (sell_order_id) REFERENCES orders(order_id),
+    CONSTRAINT chk_trades_price CHECK (trade_price > 0),
+    CONSTRAINT chk_trades_quantity CHECK (trade_quantity > 0)
 );
 
--- 마이페이지 매수/매도 거래내역 조회를 위한 단일 인덱스들 (Full Scan 방어선)
+-- 7. Outbox_Events (트랜잭션 아웃박스: DB 커밋 이후 Kafka 발행 보장)
+CREATE TABLE outbox_events (
+    event_id UUID PRIMARY KEY, -- 애플리케이션에서 UUID 생성
+    aggregate_type VARCHAR(40) NOT NULL, -- 예: ORDER, TRADE
+    aggregate_id VARCHAR(100) NOT NULL, -- 예: order_id
+    event_type VARCHAR(80) NOT NULL, -- 예: ORDER_ACCEPTED
+    topic VARCHAR(100) NOT NULL, -- 예: order-events
+    partition_key VARCHAR(100) NOT NULL, -- Kafka key
+    payload JSONB NOT NULL, -- 이벤트 페이로드
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING', -- PENDING / SENT / FAILED
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    published_at TIMESTAMPTZ,
+    CONSTRAINT chk_outbox_status CHECK (status IN ('PENDING', 'SENT', 'FAILED'))
+);
+
+-- 조회/매칭/재시도 성능을 위한 인덱스들
+CREATE INDEX idx_orders_user_created_at ON orders (user_id, created_at DESC);
+CREATE INDEX idx_orders_stock_status_accepted_at ON orders (stock_code, status, accepted_at);
+CREATE INDEX idx_orders_status_accepted_at ON orders (status, accepted_at);
+
 CREATE INDEX idx_trades_buyer ON trades (buyer_id);
 CREATE INDEX idx_trades_seller ON trades (seller_id);
+CREATE INDEX idx_trades_buy_order ON trades (buy_order_id);
+CREATE INDEX idx_trades_sell_order ON trades (sell_order_id);
+
+CREATE INDEX idx_outbox_pending_created_at ON outbox_events (status, created_at);
+CREATE INDEX idx_outbox_aggregate ON outbox_events (aggregate_type, aggregate_id);
