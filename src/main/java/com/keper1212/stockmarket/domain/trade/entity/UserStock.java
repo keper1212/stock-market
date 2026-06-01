@@ -1,4 +1,4 @@
-package com.keper1212.stockmarket.domain.account.entity;
+package com.keper1212.stockmarket.domain.trade.entity;
 
 import com.keper1212.stockmarket.domain.user.entity.User;
 import jakarta.persistence.Column;
@@ -8,29 +8,33 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OneToOne;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "accounts")
-public class Account {
-
-    private static final long INITIAL_CASH_BALANCE = 10_000_000L;
+@Table(name = "user_stocks")
+public class UserStock {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "account_id")
-    private Long accountId;
+    @Column(name = "user_stock_id")
+    private Long userStockId;
 
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false, unique = true)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(name = "cash_balance", nullable = false)
-    private long cashBalance;
+    @Column(name = "stock_code", nullable = false, length = 20)
+    private String stockCode;
+
+    @Column(name = "quantity", nullable = false)
+    private long quantity;
+
+    @Column(name = "average_cost", nullable = false)
+    private double averageCost;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
@@ -38,16 +42,7 @@ public class Account {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    protected Account() {
-    }
-
-    private Account(User user, long cashBalance) {
-        this.user = user;
-        this.cashBalance = cashBalance;
-    }
-
-    public static Account createInitial(User user) {
-        return new Account(user, INITIAL_CASH_BALANCE);
+    protected UserStock() {
     }
 
     @PrePersist
@@ -60,9 +55,5 @@ public class Account {
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = LocalDateTime.now();
-    }
-
-    public long getCashBalance() {
-        return cashBalance;
     }
 }
