@@ -58,8 +58,10 @@ CREATE TABLE orders (
     price BIGINT NOT NULL, -- 지정가 (원)
     quantity BIGINT NOT NULL, -- 원주문 수량
     remaining_quantity BIGINT NOT NULL, -- 미체결 잔량
-    status VARCHAR(20) NOT NULL, -- ACCEPTED / PARTIALLY_FILLED / FILLED / CANCELED / REJECTED
+    status VARCHAR(20) NOT NULL, -- ACCEPTED / PARTIALLY_FILLED / CANCEL_REQUESTED / FILLED / CANCELED / REJECTED
     accepted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), -- 서버 접수 시각
+    cancel_client_id VARCHAR(100),
+    cancel_requested_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(user_id),
@@ -69,7 +71,7 @@ CREATE TABLE orders (
     CONSTRAINT chk_orders_price CHECK (price > 0),
     CONSTRAINT chk_orders_quantity CHECK (quantity > 0),
     CONSTRAINT chk_orders_remaining_quantity CHECK (remaining_quantity >= 0 AND remaining_quantity <= quantity),
-    CONSTRAINT chk_orders_status CHECK (status IN ('ACCEPTED', 'PARTIALLY_FILLED', 'FILLED', 'CANCELED', 'REJECTED'))
+    CONSTRAINT chk_orders_status CHECK (status IN ('ACCEPTED', 'PARTIALLY_FILLED', 'CANCEL_REQUESTED', 'FILLED', 'CANCELED', 'REJECTED'))
 );
 
 -- 6. Trades (최종 체결 내역/영수증 테이블)

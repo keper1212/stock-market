@@ -54,6 +54,12 @@ public class Order {
     @Column(name = "accepted_at", nullable = false)
     private OffsetDateTime acceptedAt;
 
+    @Column(name = "cancel_client_id", length = 100)
+    private String cancelClientId;
+
+    @Column(name = "cancel_requested_at")
+    private OffsetDateTime cancelRequestedAt;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -132,5 +138,21 @@ public class Order {
 
     public OffsetDateTime getAcceptedAt() {
         return acceptedAt;
+    }
+
+    public String getStockCode() {
+        return stockCode;
+    }
+
+    public OrderStatus getStatus() {
+        return status;
+    }
+
+    public String getCancelClientId() {
+        return cancelClientId;
+    }
+
+    public OffsetDateTime getCancelRequestedAt() {
+        return cancelRequestedAt;
     }
 }

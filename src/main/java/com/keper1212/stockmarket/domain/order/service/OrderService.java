@@ -2,9 +2,12 @@ package com.keper1212.stockmarket.domain.order.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.keper1212.stockmarket.domain.order.controller.dto.OrderCancelRequest;
+import com.keper1212.stockmarket.domain.order.controller.dto.OrderCancelResponse;
 import com.keper1212.stockmarket.domain.order.controller.dto.OrderCreateRequest;
 import com.keper1212.stockmarket.domain.order.controller.dto.OrderCreateResponse;
 import com.keper1212.stockmarket.domain.order.entity.Order;
+import com.keper1212.stockmarket.domain.order.entity.OrderStatus;
 import com.keper1212.stockmarket.domain.order.entity.OrderType;
 import com.keper1212.stockmarket.domain.order.entity.OutboxEvent;
 import com.keper1212.stockmarket.domain.order.repository.OrderRepository;
@@ -33,6 +36,7 @@ public class OrderService {
     private static final String ORDER_EVENT_TOPIC = "order-events";
     private static final String AGGREGATE_TYPE_ORDER = "ORDER";
     private static final String EVENT_TYPE_ORDER_ACCEPTED = "ORDER_ACCEPTED";
+    private static final String EVENT_TYPE_ORDER_CANCEL_REQUESTED = "ORDER_CANCEL_REQUESTED";
 
     private final UserRepository userRepository;
     private final AccountRepository accountRepository;
@@ -111,6 +115,47 @@ public class OrderService {
         return OrderCreateResponse.accepted(orderId, acceptedAt);
     }
 
+    @Transactional
+    public OrderCancelResponse cancelOrder(Long userId, UUID orderId, OrderCancelRequest request) {
+        String clientCancelId = normalizeClientCancelId(request.clientCancelId());
+        Order order = orderRepository.findByOrderIdAndUser_UserId(orderId, userId)
+                .orElseThrow(() -> new OrderException(HttpStatus.NOT_FOUND, "취소할 주문이 존재하지 않습니다."));
+
+        if (order.getStatus() == OrderStatus.CANCEL_REQUESTED) {
+            if (clientCancelId.equals(order.getCancelClientId())) {
+                return OrderCancelResponse.alreadyAccepted(orderId, order.getCancelRequestedAt());
+            }
+            throw new OrderException(HttpStatus.CONFLICT, "이미 다른 취소 요청이 접수된 주문입니다.");
+        }
+
+        OffsetDateTime cancelRequestedAt = OffsetDateTime.now(ZoneOffset.UTC);
+        int updatedRows = orderRepository.requestCancelIfCancelable(orderId, userId, clientCancelId, cancelRequestedAt);
+        if (updatedRows == 0) {
+            throw new OrderException(HttpStatus.CONFLICT, "이미 체결되었거나 취소할 수 없는 주문입니다.");
+        }
+
+        JsonNode payload = objectMapper.valueToTree(new OrderCancelRequestedOutboxPayload(
+                orderId,
+                userId,
+                order.getStockCode(),
+                clientCancelId,
+                cancelRequestedAt
+        ));
+
+        OutboxEvent outboxEvent = OutboxEvent.pending(
+                UUID.randomUUID(),
+                AGGREGATE_TYPE_ORDER,
+                orderId.toString(),
+                EVENT_TYPE_ORDER_CANCEL_REQUESTED,
+                ORDER_EVENT_TOPIC,
+                order.getStockCode(),
+                payload
+        );
+        outboxEventRepository.save(outboxEvent);
+
+        return OrderCancelResponse.accepted(orderId, cancelRequestedAt);
+    }
+
     private void reserveResources(Long userId, OrderType orderType, String stockCode, long price, long quantity) {
         if (orderType == OrderType.BUY) {
             if (!accountRepository.existsByUser_UserId(userId)) {
@@ -147,6 +192,10 @@ public class OrderService {
         return clientOrderId.trim();
     }
 
+    private String normalizeClientCancelId(String clientCancelId) {
+        return clientCancelId.trim();
+    }
+
     private record OrderAcceptedOutboxPayload(
             UUID orderId,
             Long userId,
@@ -157,6 +206,15 @@ public class OrderService {
             long remainingQuantity,
             String clientOrderId,
             OffsetDateTime acceptedAt
+    ) {
+    }
+
+    private record OrderCancelRequestedOutboxPayload(
+            UUID orderId,
+            Long userId,
+            String stockCode,
+            String clientCancelId,
+            OffsetDateTime cancelRequestedAt
     ) {
     }
 }

@@ -1,5 +1,7 @@
 package com.keper1212.stockmarket.domain.order.controller;
 
+import com.keper1212.stockmarket.domain.order.controller.dto.OrderCancelRequest;
+import com.keper1212.stockmarket.domain.order.controller.dto.OrderCancelResponse;
 import com.keper1212.stockmarket.domain.order.controller.dto.OrderCreateRequest;
 import com.keper1212.stockmarket.domain.order.controller.dto.OrderCreateResponse;
 import com.keper1212.stockmarket.domain.order.service.OrderService;
@@ -8,8 +10,10 @@ import com.keper1212.stockmarket.global.util.JwtTokenProvider;
 import io.jsonwebtoken.JwtException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -33,6 +37,17 @@ public class OrderController {
     ) {
         Long userId = extractUserId(authorization);
         OrderCreateResponse response = orderService.placeOrder(userId, request);
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+    }
+
+    @PostMapping("/{orderId}/cancel")
+    public ResponseEntity<OrderCancelResponse> cancelOrder(
+            @PathVariable("orderId") UUID orderId,
+            @Valid @RequestBody OrderCancelRequest request,
+            @RequestHeader(value = "Authorization", required = false) String authorization
+    ) {
+        Long userId = extractUserId(authorization);
+        OrderCancelResponse response = orderService.cancelOrder(userId, orderId, request);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
