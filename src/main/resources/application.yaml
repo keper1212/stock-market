@@ -35,6 +35,25 @@ spring:
           starttls:
             enable: ${MAIL_SMTP_STARTTLS_ENABLE}
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        delivery.timeout.ms: 120000
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP_ID}
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    listener:
+      ack-mode: manual
+
 app:
   auth:
     email:
@@ -48,6 +67,15 @@ app:
       refresh-cookie-name: ${AUTH_REFRESH_COOKIE_NAME}
       refresh-cookie-secure: ${AUTH_REFRESH_COOKIE_SECURE}
       refresh-cookie-same-site: ${AUTH_REFRESH_COOKIE_SAME_SITE}
+  outbox:
+    publisher:
+      enabled: ${OUTBOX_PUBLISHER_ENABLED}
+      fixed-delay-ms: ${OUTBOX_PUBLISHER_FIXED_DELAY_MS}
+      batch-size: ${OUTBOX_PUBLISHER_BATCH_SIZE}
+      send-timeout-seconds: ${OUTBOX_PUBLISHER_SEND_TIMEOUT_SECONDS}
+  kafka:
+    consumer:
+      enabled: ${KAFKA_CONSUMER_ENABLED}
 
 # 3. Kafka 자동설정은 일단 인프라 띄우기 전까지 주석 처리하거나 exclude에 남겨둘 수 있어.
 # 지금은 완전히 빈틈없이 인프라를 붙이기 위해 kafka 관련 exclude만 남기거나 

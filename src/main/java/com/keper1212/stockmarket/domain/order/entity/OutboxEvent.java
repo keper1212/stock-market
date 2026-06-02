@@ -95,4 +95,44 @@ public class OutboxEvent {
     public void prePersist() {
         this.createdAt = OffsetDateTime.now(ZoneOffset.UTC);
     }
+
+    public void markSent(OffsetDateTime publishedAt) {
+        this.status = "SENT";
+        this.publishedAt = publishedAt;
+        this.lastError = null;
+    }
+
+    public void recordPublishFailure(String errorMessage) {
+        this.status = INITIAL_STATUS;
+        this.retryCount++;
+        this.lastError = errorMessage;
+    }
+
+    public UUID getEventId() {
+        return eventId;
+    }
+
+    public String getAggregateType() {
+        return aggregateType;
+    }
+
+    public String getAggregateId() {
+        return aggregateId;
+    }
+
+    public String getEventType() {
+        return eventType;
+    }
+
+    public String getTopic() {
+        return topic;
+    }
+
+    public String getPartitionKey() {
+        return partitionKey;
+    }
+
+    public JsonNode getPayload() {
+        return payload;
+    }
 }
