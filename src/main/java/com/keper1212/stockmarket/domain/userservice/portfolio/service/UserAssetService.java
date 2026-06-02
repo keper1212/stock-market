@@ -68,6 +68,8 @@ public class UserAssetService {
         }
 
         long cashBalance = account.getCashBalance();
+        long lockedCash = account.getLockedCash();
+        long availableCashBalance = cashBalance - lockedCash;
         long totalAsset = cashBalance + totalEvaluationAmount;
         long totalProfitOrLoss = totalEvaluationAmount - totalPurchaseAmount;
         double totalReturnRate = calculateReturnRate(totalProfitOrLoss, totalPurchaseAmount);
@@ -75,6 +77,8 @@ public class UserAssetService {
         return new UserAssetsResponse(
                 totalAsset,
                 cashBalance,
+                availableCashBalance,
+                lockedCash,
                 totalPurchaseAmount,
                 totalEvaluationAmount,
                 totalProfitOrLoss,
