@@ -24,55 +24,67 @@ public class OrderEventConsumer {
     private static final String EVENT_TYPE_ORDER_CANCEL_REQUESTED = "ORDER_CANCEL_REQUESTED";
 
     private final ObjectMapper objectMapper;
+    private final OrderBookService orderBookService;
 
     @KafkaListener(topics = "order-events", groupId = "${spring.kafka.consumer.group-id}")
     public void consume(ConsumerRecord<String, String> record, Acknowledgment acknowledgment) {
         try {
             OrderEventMessage message = objectMapper.readValue(record.value(), OrderEventMessage.class);
-            handle(message, record);
+            boolean handled = handle(message, record);
+            if (handled) {
+                acknowledgment.acknowledge();
+            }
         } catch (JsonProcessingException e) {
             log.warn("Invalid order event message skipped. topic={}, partition={}, offset={}, error={}",
                     record.topic(), record.partition(), record.offset(), e.getMessage());
-        } finally {
+            acknowledgment.acknowledge();
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid order event payload skipped. topic={}, partition={}, offset={}, error={}",
+                    record.topic(), record.partition(), record.offset(), e.getMessage());
             acknowledgment.acknowledge();
         }
     }
 
-    private void handle(OrderEventMessage message, ConsumerRecord<String, String> record) {
+    private boolean handle(OrderEventMessage message, ConsumerRecord<String, String> record) {
         if (EVENT_TYPE_ORDER_ACCEPTED.equals(message.eventType())) {
             handleOrderAccepted(message, record);
-            return;
+            return true;
         }
 
         if (EVENT_TYPE_ORDER_CANCEL_REQUESTED.equals(message.eventType())) {
             handleOrderCancelRequested(message, record);
-            return;
+            return true;
         }
 
         log.warn("Unsupported order event type skipped. eventId={}, eventType={}, topic={}, partition={}, offset={}",
                 message.eventId(), message.eventType(), record.topic(), record.partition(), record.offset());
+        return true;
     }
 
     private void handleOrderAccepted(OrderEventMessage message, ConsumerRecord<String, String> record) {
         JsonNode payload = message.payload();
-        log.info("ORDER_ACCEPTED consumed. eventId={}, orderId={}, stockCode={}, orderType={}, price={}, quantity={}, partition={}, offset={}",
+        boolean stored = orderBookService.storeAcceptedOrder(payload);
+        log.info("ORDER_ACCEPTED consumed. eventId={}, orderId={}, stockCode={}, orderType={}, price={}, quantity={}, redisStored={}, partition={}, offset={}",
                 message.eventId(),
                 payload.path("orderId").asText(),
                 payload.path("stockCode").asText(),
                 payload.path("orderType").asText(),
                 payload.path("price").asLong(),
                 payload.path("quantity").asLong(),
+                stored,
                 record.partition(),
                 record.offset());
     }
 
     private void handleOrderCancelRequested(OrderEventMessage message, ConsumerRecord<String, String> record) {
         JsonNode payload = message.payload();
-        log.info("ORDER_CANCEL_REQUESTED consumed. eventId={}, orderId={}, stockCode={}, clientCancelId={}, partition={}, offset={}",
+        boolean marked = orderBookService.markCancelRequested(payload);
+        log.info("ORDER_CANCEL_REQUESTED consumed. eventId={}, orderId={}, stockCode={}, clientCancelId={}, redisMarked={}, partition={}, offset={}",
                 message.eventId(),
                 payload.path("orderId").asText(),
                 payload.path("stockCode").asText(),
                 payload.path("clientCancelId").asText(),
+                marked,
                 record.partition(),
                 record.offset());
     }
