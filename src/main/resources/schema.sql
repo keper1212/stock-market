@@ -77,6 +77,7 @@ CREATE TABLE orders (
 -- 6. Trades (최종 체결 내역/영수증 테이블)
 CREATE TABLE trades (
     trade_id BIGSERIAL PRIMARY KEY,
+    trade_event_id UUID UNIQUE NOT NULL,
     stock_code VARCHAR(20) NOT NULL,
     buyer_id BIGINT NOT NULL,
     seller_id BIGINT NOT NULL,

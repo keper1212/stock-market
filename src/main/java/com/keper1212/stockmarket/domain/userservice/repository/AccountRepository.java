@@ -22,4 +22,29 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
               AND (cash_balance - locked_cash) >= :lockAmount
             """, nativeQuery = true)
     int lockCashByUserIdIfAvailable(@Param("userId") Long userId, @Param("lockAmount") long lockAmount);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE accounts
+            SET cash_balance = cash_balance - :tradeAmount,
+                locked_cash = locked_cash - :lockedAmount,
+                updated_at = NOW()
+            WHERE user_id = :buyerId
+              AND locked_cash >= :lockedAmount
+              AND cash_balance >= :tradeAmount
+            """, nativeQuery = true)
+    int settleBuyerCash(
+            @Param("buyerId") long buyerId,
+            @Param("lockedAmount") long lockedAmount,
+            @Param("tradeAmount") long tradeAmount
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE accounts
+            SET cash_balance = cash_balance + :tradeAmount,
+                updated_at = NOW()
+            WHERE user_id = :sellerId
+            """, nativeQuery = true)
+    int settleSellerCash(@Param("sellerId") long sellerId, @Param("tradeAmount") long tradeAmount);
 }

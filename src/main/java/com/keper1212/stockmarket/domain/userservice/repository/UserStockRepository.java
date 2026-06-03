@@ -48,6 +48,44 @@ public interface UserStockRepository extends JpaRepository<UserStock, Long> {
             @Param("lockQuantity") long lockQuantity
     );
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            INSERT INTO user_stocks (user_id, stock_code, quantity, locked_quantity, average_cost, created_at, updated_at)
+            VALUES (:buyerId, :stockCode, :tradeQuantity, 0, :tradePrice, NOW(), NOW())
+            ON CONFLICT (user_id, stock_code)
+            DO UPDATE SET
+                average_cost = CASE
+                    WHEN user_stocks.quantity + EXCLUDED.quantity = 0 THEN 0
+                    ELSE ((user_stocks.average_cost * user_stocks.quantity) + (:tradePrice * :tradeQuantity))
+                        / (user_stocks.quantity + EXCLUDED.quantity)
+                END,
+                quantity = user_stocks.quantity + EXCLUDED.quantity,
+                updated_at = NOW()
+            """, nativeQuery = true)
+    int addBuyerStock(
+            @Param("buyerId") long buyerId,
+            @Param("stockCode") String stockCode,
+            @Param("tradeQuantity") long tradeQuantity,
+            @Param("tradePrice") long tradePrice
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE user_stocks
+            SET quantity = quantity - :tradeQuantity,
+                locked_quantity = locked_quantity - :tradeQuantity,
+                updated_at = NOW()
+            WHERE user_id = :sellerId
+              AND stock_code = :stockCode
+              AND quantity >= :tradeQuantity
+              AND locked_quantity >= :tradeQuantity
+            """, nativeQuery = true)
+    int settleSellerStock(
+            @Param("sellerId") long sellerId,
+            @Param("stockCode") String stockCode,
+            @Param("tradeQuantity") long tradeQuantity
+    );
+
     interface UserStockAssetView {
         String getStockCode();
 

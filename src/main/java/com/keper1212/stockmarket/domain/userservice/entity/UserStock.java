@@ -1,6 +1,5 @@
 package com.keper1212.stockmarket.domain.userservice.entity;
 
-import com.keper1212.stockmarket.domain.userservice.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;

@@ -24,7 +24,7 @@ public class OrderEventConsumer {
     private static final String EVENT_TYPE_ORDER_CANCEL_REQUESTED = "ORDER_CANCEL_REQUESTED";
 
     private final ObjectMapper objectMapper;
-    private final OrderBookService orderBookService;
+    private final MatchingEngineService matchingEngineService;
 
     @KafkaListener(topics = "order-events", groupId = "${spring.kafka.consumer.group-id}")
     public void consume(ConsumerRecord<String, String> record, Acknowledgment acknowledgment) {
@@ -63,22 +63,22 @@ public class OrderEventConsumer {
 
     private void handleOrderAccepted(OrderEventMessage message, ConsumerRecord<String, String> record) {
         JsonNode payload = message.payload();
-        boolean stored = orderBookService.storeAcceptedOrder(payload);
-        log.info("ORDER_ACCEPTED consumed. eventId={}, orderId={}, stockCode={}, orderType={}, price={}, quantity={}, redisStored={}, partition={}, offset={}",
+        String matchResult = matchingEngineService.matchAcceptedOrder(payload);
+        log.info("ORDER_ACCEPTED consumed. eventId={}, orderId={}, stockCode={}, orderType={}, price={}, quantity={}, matchResult={}, partition={}, offset={}",
                 message.eventId(),
                 payload.path("orderId").asText(),
                 payload.path("stockCode").asText(),
                 payload.path("orderType").asText(),
                 payload.path("price").asLong(),
                 payload.path("quantity").asLong(),
-                stored,
+                matchResult,
                 record.partition(),
                 record.offset());
     }
 
     private void handleOrderCancelRequested(OrderEventMessage message, ConsumerRecord<String, String> record) {
         JsonNode payload = message.payload();
-        boolean marked = orderBookService.markCancelRequested(payload);
+        boolean marked = matchingEngineService.markCancelRequested(payload);
         log.info("ORDER_CANCEL_REQUESTED consumed. eventId={}, orderId={}, stockCode={}, clientCancelId={}, redisMarked={}, partition={}, offset={}",
                 message.eventId(),
                 payload.path("orderId").asText(),
