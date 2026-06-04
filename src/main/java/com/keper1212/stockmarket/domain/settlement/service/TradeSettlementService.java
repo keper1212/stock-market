@@ -4,12 +4,16 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.keper1212.stockmarket.domain.order.entity.Trade;
 import com.keper1212.stockmarket.domain.order.repository.OrderRepository;
 import com.keper1212.stockmarket.domain.order.repository.TradeRepository;
+import com.keper1212.stockmarket.domain.realtime.dto.TradeExecutedRealtimeMessage;
+import com.keper1212.stockmarket.domain.realtime.service.RealtimePublisher;
 import com.keper1212.stockmarket.domain.userservice.repository.AccountRepository;
 import com.keper1212.stockmarket.domain.userservice.repository.UserStockRepository;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +23,7 @@ public class TradeSettlementService {
     private final OrderRepository orderRepository;
     private final AccountRepository accountRepository;
     private final UserStockRepository userStockRepository;
+    private final RealtimePublisher realtimePublisher;
 
     @Transactional
     public boolean settle(JsonNode payload) {
@@ -39,6 +44,7 @@ public class TradeSettlementService {
         String sellOrderStatus = requiredText(payload, "sellOrderStatus");
         long tradePrice = requiredLong(payload, "tradePrice");
         long tradeQuantity = requiredLong(payload, "tradeQuantity");
+        String executedAt = requiredText(payload, "executedAt");
 
         long buyerLockedAmount = multiplyExact(buyOrderPrice, tradeQuantity);
         long tradeAmount = multiplyExact(tradePrice, tradeQuantity);
@@ -60,7 +66,34 @@ public class TradeSettlementService {
                 tradePrice,
                 tradeQuantity
         ));
+        publishRealtimeAfterCommit(new TradeExecutedRealtimeMessage(
+                stockCode,
+                buyOrderId,
+                sellOrderId,
+                tradePrice,
+                tradeQuantity,
+                executedAt
+        ));
         return true;
+    }
+
+    private void publishRealtimeAfterCommit(TradeExecutedRealtimeMessage message) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            publishRealtime(message);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                publishRealtime(message);
+            }
+        });
+    }
+
+    private void publishRealtime(TradeExecutedRealtimeMessage message) {
+        realtimePublisher.publishTradeExecuted(message);
+        realtimePublisher.publishMarketSnapshots(message.stockCode());
     }
 
     private long multiplyExact(long left, long right) {
