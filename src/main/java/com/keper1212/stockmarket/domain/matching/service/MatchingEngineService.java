@@ -16,7 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class MatchingEngineService {
 
     private static final String AGGREGATE_TYPE_TRADE = "TRADE";
+    private static final String AGGREGATE_TYPE_ORDER = "ORDER";
     private static final String EVENT_TYPE_TRADE_EXECUTED = "TRADE_EXECUTED";
+    private static final String EVENT_TYPE_ORDER_CANCELED = "ORDER_CANCELED";
     private static final String TRADE_EVENT_TOPIC = "trade-events";
 
     private final OrderBookService orderBookService;
@@ -30,8 +32,11 @@ public class MatchingEngineService {
         return matchResult;
     }
 
-    public boolean markCancelRequested(JsonNode payload) {
-        return orderBookService.markCancelRequested(payload);
+    @Transactional
+    public String cancelRequestedOrder(JsonNode payload) {
+        String cancelResult = orderBookService.cancelRequestedOrder(payload);
+        publishOrderCanceledEvent(cancelResult);
+        return cancelResult;
     }
 
     private void publishTradeExecutedEvents(String matchResult) {
@@ -71,6 +76,41 @@ public class MatchingEngineService {
                     payload
             ));
         }
+    }
+
+    private void publishOrderCanceledEvent(String cancelResult) {
+        JsonNode result = parseResult(cancelResult);
+        if (!"CANCELED".equals(requiredText(result, "result"))) {
+            return;
+        }
+
+        long canceledQuantity = requiredLong(result, "canceledQuantity");
+        if (canceledQuantity <= 0) {
+            return;
+        }
+
+        UUID eventId = UUID.randomUUID();
+        JsonNode payload = objectMapper.valueToTree(new OrderCanceledOutboxPayload(
+                eventId,
+                UUID.fromString(requiredText(result, "orderId")),
+                requiredLong(result, "userId"),
+                requiredText(result, "stockCode"),
+                requiredText(result, "orderType"),
+                requiredLong(result, "price"),
+                canceledQuantity,
+                requiredText(result, "clientCancelId"),
+                OffsetDateTime.parse(requiredText(result, "canceledAt"))
+        ));
+
+        outboxEventRepository.save(OutboxEvent.pending(
+                eventId,
+                AGGREGATE_TYPE_ORDER,
+                requiredText(result, "orderId"),
+                EVENT_TYPE_ORDER_CANCELED,
+                TRADE_EVENT_TOPIC,
+                requiredText(result, "stockCode"),
+                payload
+        ));
     }
 
     private JsonNode parseResult(String matchResult) {
@@ -117,6 +157,19 @@ public class MatchingEngineService {
             long tradePrice,
             long tradeQuantity,
             OffsetDateTime executedAt
+    ) {
+    }
+
+    private record OrderCanceledOutboxPayload(
+            UUID cancelEventId,
+            UUID orderId,
+            long userId,
+            String stockCode,
+            String orderType,
+            long price,
+            long canceledQuantity,
+            String clientCancelId,
+            OffsetDateTime canceledAt
     ) {
     }
 }

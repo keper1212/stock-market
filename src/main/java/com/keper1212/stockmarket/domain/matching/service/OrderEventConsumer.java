@@ -78,13 +78,13 @@ public class OrderEventConsumer {
 
     private void handleOrderCancelRequested(OrderEventMessage message, ConsumerRecord<String, String> record) {
         JsonNode payload = message.payload();
-        boolean marked = matchingEngineService.markCancelRequested(payload);
-        log.info("ORDER_CANCEL_REQUESTED consumed. eventId={}, orderId={}, stockCode={}, clientCancelId={}, redisMarked={}, partition={}, offset={}",
+        String cancelResult = matchingEngineService.cancelRequestedOrder(payload);
+        log.info("ORDER_CANCEL_REQUESTED consumed. eventId={}, orderId={}, stockCode={}, clientCancelId={}, cancelResult={}, partition={}, offset={}",
                 message.eventId(),
                 payload.path("orderId").asText(),
                 payload.path("stockCode").asText(),
                 payload.path("clientCancelId").asText(),
-                marked,
+                cancelResult,
                 record.partition(),
                 record.offset());
     }

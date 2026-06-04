@@ -86,6 +86,21 @@ public interface UserStockRepository extends JpaRepository<UserStock, Long> {
             @Param("tradeQuantity") long tradeQuantity
     );
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE user_stocks
+            SET locked_quantity = locked_quantity - :unlockQuantity,
+                updated_at = NOW()
+            WHERE user_id = :userId
+              AND stock_code = :stockCode
+              AND locked_quantity >= :unlockQuantity
+            """, nativeQuery = true)
+    int unlockQuantityByUserIdAndStockCode(
+            @Param("userId") long userId,
+            @Param("stockCode") String stockCode,
+            @Param("unlockQuantity") long unlockQuantity
+    );
+
     interface UserStockAssetView {
         String getStockCode();
 

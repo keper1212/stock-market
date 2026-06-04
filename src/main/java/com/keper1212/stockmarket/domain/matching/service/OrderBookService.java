@@ -14,7 +14,6 @@ public class OrderBookService {
     private static final String BID = "BID";
     private static final String ASK = "ASK";
     private static final String ORDER_STATUS_ACCEPTED = "ACCEPTED";
-    private static final String ORDER_STATUS_CANCEL_REQUESTED = "CANCEL_REQUESTED";
     private static final String MATCH_RESULT_KEY_PREFIX = "match:results:";
     private static final String ORDER_MATCH_RESULT_KEY_PREFIX = "match:order:";
 
@@ -241,21 +240,83 @@ public class OrderBookService {
             String.class
     );
 
-    private static final DefaultRedisScript<Long> MARK_CANCEL_REQUESTED_SCRIPT = new DefaultRedisScript<>(
+    private static final DefaultRedisScript<String> CANCEL_REQUESTED_ORDER_SCRIPT = new DefaultRedisScript<>(
             """
             if redis.call('EXISTS', KEYS[1]) == 0 then
-                return 0
+                return cjson.encode({
+                    result = 'NOT_FOUND',
+                    orderId = ARGV[1],
+                    canceledQuantity = 0
+                })
+            end
+
+            local orderId = ARGV[1]
+            local clientCancelId = ARGV[2]
+            local cancelRequestedAt = ARGV[3]
+            local canceledAt = ARGV[4]
+            local status = redis.call('HGET', KEYS[1], 'status')
+            local remainingQuantity = tonumber(redis.call('HGET', KEYS[1], 'remainingQuantity') or '0')
+
+            if status == 'CANCELED' then
+                return cjson.encode({
+                    result = 'DUPLICATE',
+                    orderId = orderId,
+                    stockCode = redis.call('HGET', KEYS[1], 'stockCode'),
+                    orderType = redis.call('HGET', KEYS[1], 'orderType'),
+                    userId = tonumber(redis.call('HGET', KEYS[1], 'userId') or '0'),
+                    price = tonumber(redis.call('HGET', KEYS[1], 'price') or '0'),
+                    canceledQuantity = 0,
+                    clientCancelId = clientCancelId,
+                    canceledAt = canceledAt
+                })
+            end
+
+            if status == 'FILLED' or remainingQuantity <= 0 then
+                return cjson.encode({
+                    result = 'NOT_CANCELABLE',
+                    orderId = orderId,
+                    stockCode = redis.call('HGET', KEYS[1], 'stockCode'),
+                    orderType = redis.call('HGET', KEYS[1], 'orderType'),
+                    userId = tonumber(redis.call('HGET', KEYS[1], 'userId') or '0'),
+                    price = tonumber(redis.call('HGET', KEYS[1], 'price') or '0'),
+                    canceledQuantity = 0,
+                    clientCancelId = clientCancelId,
+                    canceledAt = canceledAt
+                })
             end
 
             redis.call('HSET', KEYS[1],
-                'status', ARGV[1],
-                'clientCancelId', ARGV[2],
-                'cancelRequestedAt', ARGV[3]
+                'status', 'CANCELED',
+                'remainingQuantity', 0,
+                'clientCancelId', clientCancelId,
+                'cancelRequestedAt', cancelRequestedAt,
+                'canceledAt', canceledAt
             )
 
-            return 1
+            if remainingQuantity > 0 then
+                redis.call('HINCRBY', KEYS[3], ARGV[5], -remainingQuantity)
+                redis.call('LREM', KEYS[4], 0, orderId)
+
+                local currentVolume = tonumber(redis.call('HGET', KEYS[3], ARGV[5]) or '0')
+                if currentVolume <= 0 then
+                    redis.call('HDEL', KEYS[3], ARGV[5])
+                    redis.call('ZREM', KEYS[2], ARGV[6])
+                end
+            end
+
+            return cjson.encode({
+                result = 'CANCELED',
+                orderId = orderId,
+                stockCode = redis.call('HGET', KEYS[1], 'stockCode'),
+                orderType = redis.call('HGET', KEYS[1], 'orderType'),
+                userId = tonumber(redis.call('HGET', KEYS[1], 'userId') or '0'),
+                price = tonumber(redis.call('HGET', KEYS[1], 'price') or '0'),
+                canceledQuantity = remainingQuantity,
+                clientCancelId = clientCancelId,
+                canceledAt = canceledAt
+            })
             """,
-            Long.class
+            String.class
     );
 
     private final StringRedisTemplate stringRedisTemplate;
@@ -303,20 +364,46 @@ public class OrderBookService {
         );
     }
 
-    public boolean markCancelRequested(JsonNode payload) {
+    public String cancelRequestedOrder(JsonNode payload) {
         String orderId = requiredText(payload, "orderId");
+        String stockCode = requiredText(payload, "stockCode");
         String clientCancelId = requiredText(payload, "clientCancelId");
         String cancelRequestedAt = requiredText(payload, "cancelRequestedAt");
+        String canceledAt = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).toString();
 
-        Long result = stringRedisTemplate.execute(
-                MARK_CANCEL_REQUESTED_SCRIPT,
-                List.of(ORDER_KEY_PREFIX + orderId),
-                ORDER_STATUS_CANCEL_REQUESTED,
+        String orderKey = ORDER_KEY_PREFIX + orderId;
+        String orderType = (String) stringRedisTemplate.opsForHash().get(orderKey, "orderType");
+        String price = (String) stringRedisTemplate.opsForHash().get(orderKey, "price");
+
+        if (orderType == null || price == null) {
+            return stringRedisTemplate.execute(
+                    CANCEL_REQUESTED_ORDER_SCRIPT,
+                    List.of(orderKey, BID_KEY_PREFIX + stockCode, VOLUME_KEY_PREFIX + stockCode, ORDERS_KEY_PREFIX + stockCode + ":BID:0"),
+                    orderId,
+                    clientCancelId,
+                    cancelRequestedAt,
+                    canceledAt,
+                    BID + ":0",
+                    "0"
+            );
+        }
+
+        String side = resolveSide(orderType);
+        String priceBookKey = priceBookKey(stockCode, side);
+        String volumeKey = VOLUME_KEY_PREFIX + stockCode;
+        String volumeField = side + ":" + price;
+        String ordersKey = ORDERS_KEY_PREFIX + stockCode + ":" + side + ":" + price;
+
+        return stringRedisTemplate.execute(
+                CANCEL_REQUESTED_ORDER_SCRIPT,
+                List.of(orderKey, priceBookKey, volumeKey, ordersKey),
+                orderId,
                 clientCancelId,
-                cancelRequestedAt
+                cancelRequestedAt,
+                canceledAt,
+                volumeField,
+                price
         );
-
-        return Long.valueOf(1L).equals(result);
     }
 
     private String priceBookKey(String stockCode, String side) {

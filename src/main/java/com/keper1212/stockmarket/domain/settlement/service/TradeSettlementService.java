@@ -19,6 +19,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @RequiredArgsConstructor
 public class TradeSettlementService {
 
+    private static final String ORDER_TYPE_BUY = "BUY";
+    private static final String ORDER_TYPE_SELL = "SELL";
+
     private final TradeRepository tradeRepository;
     private final OrderRepository orderRepository;
     private final AccountRepository accountRepository;
@@ -77,6 +80,37 @@ public class TradeSettlementService {
         return true;
     }
 
+    @Transactional
+    public boolean cancel(JsonNode payload) {
+        UUID orderId = UUID.fromString(requiredText(payload, "orderId"));
+        long userId = requiredLong(payload, "userId");
+        String stockCode = requiredText(payload, "stockCode");
+        String orderType = requiredText(payload, "orderType");
+        long price = requiredLong(payload, "price");
+        long canceledQuantity = requiredLong(payload, "canceledQuantity");
+
+        if (canceledQuantity <= 0) {
+            return false;
+        }
+
+        int updatedRows = orderRepository.completeCancel(orderId, userId, canceledQuantity);
+        if (updatedRows == 0) {
+            return false;
+        }
+
+        if (ORDER_TYPE_BUY.equals(orderType)) {
+            long unlockAmount = multiplyExact(price, canceledQuantity);
+            assertUpdated(accountRepository.unlockCashByUserId(userId, unlockAmount), "매수 취소 예수금 잠금 해제에 실패했습니다.");
+        } else if (ORDER_TYPE_SELL.equals(orderType)) {
+            assertUpdated(userStockRepository.unlockQuantityByUserIdAndStockCode(userId, stockCode, canceledQuantity), "매도 취소 보유수량 잠금 해제에 실패했습니다.");
+        } else {
+            throw new IllegalArgumentException("Unsupported canceled order type: " + orderType);
+        }
+
+        publishMarketSnapshotsAfterCommit(stockCode);
+        return true;
+    }
+
     private void publishRealtimeAfterCommit(TradeExecutedRealtimeMessage message) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             publishRealtime(message);
@@ -94,6 +128,20 @@ public class TradeSettlementService {
     private void publishRealtime(TradeExecutedRealtimeMessage message) {
         realtimePublisher.publishTradeExecuted(message);
         realtimePublisher.publishMarketSnapshots(message.stockCode());
+    }
+
+    private void publishMarketSnapshotsAfterCommit(String stockCode) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            realtimePublisher.publishMarketSnapshots(stockCode);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                realtimePublisher.publishMarketSnapshots(stockCode);
+            }
+        });
     }
 
     private long multiplyExact(long left, long right) {

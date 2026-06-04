@@ -47,4 +47,14 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
             WHERE user_id = :sellerId
             """, nativeQuery = true)
     int settleSellerCash(@Param("sellerId") long sellerId, @Param("tradeAmount") long tradeAmount);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE accounts
+            SET locked_cash = locked_cash - :unlockAmount,
+                updated_at = NOW()
+            WHERE user_id = :userId
+              AND locked_cash >= :unlockAmount
+            """, nativeQuery = true)
+    int unlockCashByUserId(@Param("userId") long userId, @Param("unlockAmount") long unlockAmount);
 }

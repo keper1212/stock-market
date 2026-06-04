@@ -48,4 +48,21 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
             @Param("remainingQuantity") long remainingQuantity,
             @Param("status") String status
     );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE orders
+            SET remaining_quantity = 0,
+                status = 'CANCELED',
+                updated_at = NOW()
+            WHERE order_id = :orderId
+              AND user_id = :userId
+              AND status = 'CANCEL_REQUESTED'
+              AND remaining_quantity >= :canceledQuantity
+            """, nativeQuery = true)
+    int completeCancel(
+            @Param("orderId") UUID orderId,
+            @Param("userId") long userId,
+            @Param("canceledQuantity") long canceledQuantity
+    );
 }
