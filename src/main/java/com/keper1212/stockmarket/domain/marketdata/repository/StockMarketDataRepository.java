@@ -1,7 +1,9 @@
 package com.keper1212.stockmarket.domain.marketdata.repository;
 
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -50,6 +52,31 @@ public class StockMarketDataRepository {
                         rs.getLong("trade_amount")
                 )
         );
+    }
+
+    public Optional<Long> findCurrentPriceByStockCode(String stockCode) {
+        try {
+            Long currentPrice = jdbcTemplate.queryForObject(
+                    """
+                    SELECT COALESCE(latest.trade_price, s.base_price) AS current_price
+                    FROM stocks s
+                    LEFT JOIN LATERAL (
+                        SELECT t.trade_price
+                        FROM trades t
+                        WHERE t.stock_code = s.stock_code
+                        ORDER BY t.created_at DESC
+                        LIMIT 1
+                    ) latest ON TRUE
+                    WHERE s.stock_code = ?
+                      AND s.is_trading = TRUE
+                    """,
+                    Long.class,
+                    stockCode
+            );
+            return Optional.ofNullable(currentPrice);
+        } catch (EmptyResultDataAccessException e) {
+            return Optional.empty();
+        }
     }
 
     public record StockDashboardRow(
