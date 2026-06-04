@@ -4,6 +4,7 @@ import com.keper1212.stockmarket.domain.order.controller.dto.OrderCancelRequest;
 import com.keper1212.stockmarket.domain.order.controller.dto.OrderCancelResponse;
 import com.keper1212.stockmarket.domain.order.controller.dto.OrderCreateRequest;
 import com.keper1212.stockmarket.domain.order.controller.dto.OrderCreateResponse;
+import com.keper1212.stockmarket.domain.order.controller.dto.OrderHistoryResponse;
 import com.keper1212.stockmarket.domain.order.service.OrderService;
 import com.keper1212.stockmarket.global.error.AuthException;
 import com.keper1212.stockmarket.global.util.JwtTokenProvider;
@@ -13,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -29,6 +31,14 @@ public class OrderController {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final OrderService orderService;
+
+    @GetMapping("/me")
+    public ResponseEntity<OrderHistoryResponse> getMyOrderHistory(
+            @RequestHeader(value = "Authorization", required = false) String authorization
+    ) {
+        Long userId = extractUserId(authorization);
+        return ResponseEntity.ok(orderService.getMyOrderHistory(userId));
+    }
 
     @PostMapping
     public ResponseEntity<OrderCreateResponse> createOrder(

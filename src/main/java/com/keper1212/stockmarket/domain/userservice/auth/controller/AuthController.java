@@ -6,6 +6,7 @@ import com.keper1212.stockmarket.domain.userservice.auth.dto.EmailCodeVerifyRequ
 import com.keper1212.stockmarket.domain.userservice.auth.dto.EmailCodeVerifyResponse;
 import com.keper1212.stockmarket.domain.userservice.auth.dto.LoginRequest;
 import com.keper1212.stockmarket.domain.userservice.auth.dto.LoginResponse;
+import com.keper1212.stockmarket.domain.userservice.auth.dto.LogoutResponse;
 import com.keper1212.stockmarket.domain.userservice.auth.dto.RefreshTokenResponse;
 import com.keper1212.stockmarket.domain.userservice.auth.dto.SignupRequest;
 import com.keper1212.stockmarket.domain.userservice.auth.dto.SignupResponse;
@@ -79,6 +80,25 @@ public class AuthController {
         String refreshToken = extractRefreshTokenFromCookie(httpServletRequest);
         RefreshTokenResponse response = refreshTokenService.refreshAccessToken(refreshToken);
         return ResponseEntity.ok(response);
+    }
+
+
+    @PostMapping("/logout")
+    public ResponseEntity<LogoutResponse> logout(HttpServletRequest httpServletRequest) {
+        String refreshToken = extractRefreshTokenFromCookie(httpServletRequest);
+        refreshTokenService.logout(refreshToken);
+
+        ResponseCookie expiredRefreshCookie = ResponseCookie.from(refreshCookieName, "")
+                .httpOnly(true)
+                .secure(refreshCookieSecure)
+                .path("/")
+                .maxAge(0)
+                .sameSite(refreshCookieSameSite)
+                .build();
+
+        return ResponseEntity.ok()
+                .header("Set-Cookie", expiredRefreshCookie.toString())
+                .body(LogoutResponse.success());
     }
 
     @PostMapping("/signup")

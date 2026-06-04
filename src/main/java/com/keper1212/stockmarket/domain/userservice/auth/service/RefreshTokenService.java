@@ -46,6 +46,20 @@ public class RefreshTokenService {
         return RefreshTokenResponse.success(newAccessToken);
     }
 
+
+    public void logout(String refreshToken) {
+        if (!StringUtils.hasText(refreshToken)) {
+            return;
+        }
+
+        try {
+            Long userId = jwtTokenProvider.getUserIdFromToken(refreshToken.trim());
+            stringRedisTemplate.delete(REFRESH_TOKEN_KEY_PREFIX + userId);
+        } catch (JwtException | IllegalArgumentException ignored) {
+            // Invalid tokens are treated as already logged out.
+        }
+    }
+
     private Long extractUserId(String refreshToken) {
         try {
             return jwtTokenProvider.getUserIdFromToken(refreshToken);

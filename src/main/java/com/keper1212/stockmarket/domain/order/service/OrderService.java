@@ -6,11 +6,13 @@ import com.keper1212.stockmarket.domain.order.controller.dto.OrderCancelRequest;
 import com.keper1212.stockmarket.domain.order.controller.dto.OrderCancelResponse;
 import com.keper1212.stockmarket.domain.order.controller.dto.OrderCreateRequest;
 import com.keper1212.stockmarket.domain.order.controller.dto.OrderCreateResponse;
+import com.keper1212.stockmarket.domain.order.controller.dto.OrderHistoryResponse;
 import com.keper1212.stockmarket.domain.order.entity.Order;
 import com.keper1212.stockmarket.domain.order.entity.OrderStatus;
 import com.keper1212.stockmarket.domain.order.entity.OrderType;
 import com.keper1212.stockmarket.domain.order.entity.OutboxEvent;
 import com.keper1212.stockmarket.domain.order.repository.OrderRepository;
+import com.keper1212.stockmarket.domain.order.repository.OrderQueryRepository;
 import com.keper1212.stockmarket.domain.order.repository.OutboxEventRepository;
 import com.keper1212.stockmarket.domain.order.repository.StockOrderValidationRepository;
 import com.keper1212.stockmarket.domain.userservice.entity.User;
@@ -42,9 +44,18 @@ public class OrderService {
     private final AccountRepository accountRepository;
     private final UserStockRepository userStockRepository;
     private final OrderRepository orderRepository;
+    private final OrderQueryRepository orderQueryRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final StockOrderValidationRepository stockOrderValidationRepository;
     private final ObjectMapper objectMapper;
+
+    @Transactional(readOnly = true)
+    public OrderHistoryResponse getMyOrderHistory(Long userId) {
+        return new OrderHistoryResponse(
+                orderQueryRepository.findMyOrders(userId),
+                orderQueryRepository.findMyTrades(userId)
+        );
+    }
 
     @Transactional
     public OrderCreateResponse placeOrder(Long userId, OrderCreateRequest request) {
