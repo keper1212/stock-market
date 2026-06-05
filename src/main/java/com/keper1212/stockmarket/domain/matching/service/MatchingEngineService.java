@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.keper1212.stockmarket.domain.order.entity.OutboxEvent;
 import com.keper1212.stockmarket.domain.order.repository.OutboxEventRepository;
+import com.keper1212.stockmarket.domain.realtime.service.RealtimePublisher;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
@@ -24,11 +25,19 @@ public class MatchingEngineService {
     private final OrderBookService orderBookService;
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
+    private final RealtimePublisher realtimePublisher;
 
     @Transactional
     public String matchAcceptedOrder(JsonNode payload) {
+        String stockCode = requiredText(payload, "stockCode");
         String matchResult = orderBookService.matchAcceptedOrder(payload);
-        publishTradeExecutedEvents(matchResult);
+        JsonNode result = parseResult(matchResult);
+
+        if (!hasTrades(result)) {
+            realtimePublisher.publishOrderBookSnapshot(stockCode);
+        }
+
+        publishTradeExecutedEvents(result);
         return matchResult;
     }
 
@@ -39,8 +48,13 @@ public class MatchingEngineService {
         return cancelResult;
     }
 
-    private void publishTradeExecutedEvents(String matchResult) {
-        JsonNode result = parseResult(matchResult);
+
+    private boolean hasTrades(JsonNode result) {
+        JsonNode trades = result.path("trades");
+        return trades.isArray() && !trades.isEmpty();
+    }
+
+    private void publishTradeExecutedEvents(JsonNode result) {
         JsonNode trades = result.path("trades");
         if (!trades.isArray() || trades.isEmpty()) {
             return;

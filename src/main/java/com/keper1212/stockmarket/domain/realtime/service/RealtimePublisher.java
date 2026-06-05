@@ -36,6 +36,17 @@ public class RealtimePublisher {
         }
     }
 
+
+    public void publishOrderBookSnapshot(String stockCode) {
+        try {
+            OrderBookResponse orderBook = stockMarketDataService.getOrderBook(stockCode);
+            messagingTemplate.convertAndSend(ORDERBOOK_TOPIC_FORMAT.formatted(orderBook.stockCode()), orderBook);
+            log.info("Realtime orderbook snapshot published. stockCode={}", orderBook.stockCode());
+        } catch (RuntimeException e) {
+            log.warn("Realtime orderbook snapshot publish failed. stockCode={}, error={}", stockCode, e.getMessage());
+        }
+    }
+
     public void publishTradeExecuted(TradeExecutedRealtimeMessage message) {
         messagingTemplate.convertAndSend(TRADES_TOPIC_FORMAT.formatted(message.stockCode()), message);
         log.info("Realtime trade executed published. stockCode={}, tradePrice={}, tradeQuantity={}",
