@@ -22,6 +22,7 @@ public class TradeEventConsumer {
 
     private static final String EVENT_TYPE_TRADE_EXECUTED = "TRADE_EXECUTED";
     private static final String EVENT_TYPE_ORDER_CANCELED = "ORDER_CANCELED";
+    private static final String EVENT_TYPE_ORDER_REJECTED = "ORDER_REJECTED";
 
     private final ObjectMapper objectMapper;
     private final TradeSettlementService tradeSettlementService;
@@ -38,6 +39,12 @@ public class TradeEventConsumer {
 
             if (EVENT_TYPE_ORDER_CANCELED.equals(message.eventType())) {
                 handleOrderCanceled(message, record);
+                acknowledgment.acknowledge();
+                return;
+            }
+
+            if (EVENT_TYPE_ORDER_REJECTED.equals(message.eventType())) {
+                handleOrderRejected(message, record);
                 acknowledgment.acknowledge();
                 return;
             }
@@ -78,6 +85,22 @@ public class TradeEventConsumer {
                 payload.path("stockCode").asText(),
                 payload.path("orderType").asText(),
                 payload.path("canceledQuantity").asLong(),
+                settled,
+                record.partition(),
+                record.offset());
+    }
+
+    private void handleOrderRejected(TradeEventMessage message, ConsumerRecord<String, String> record) {
+        boolean settled = tradeSettlementService.reject(message.payload());
+        JsonNode payload = message.payload();
+        log.info("ORDER_REJECTED consumed. eventId={}, rejectEventId={}, orderId={}, stockCode={}, orderType={}, rejectedQuantity={}, reason={}, dbSettled={}, partition={}, offset={}",
+                message.eventId(),
+                payload.path("rejectEventId").asText(),
+                payload.path("orderId").asText(),
+                payload.path("stockCode").asText(),
+                payload.path("orderType").asText(),
+                payload.path("rejectedQuantity").asLong(),
+                payload.path("reason").asText(),
                 settled,
                 record.partition(),
                 record.offset());

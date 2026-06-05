@@ -20,6 +20,7 @@ public class MatchingEngineService {
     private static final String AGGREGATE_TYPE_ORDER = "ORDER";
     private static final String EVENT_TYPE_TRADE_EXECUTED = "TRADE_EXECUTED";
     private static final String EVENT_TYPE_ORDER_CANCELED = "ORDER_CANCELED";
+    private static final String EVENT_TYPE_ORDER_REJECTED = "ORDER_REJECTED";
     private static final String TRADE_EVENT_TOPIC = "trade-events";
 
     private final OrderBookService orderBookService;
@@ -38,6 +39,7 @@ public class MatchingEngineService {
         }
 
         publishTradeExecutedEvents(result);
+        publishOrderRejectedEvent(result);
         return matchResult;
     }
 
@@ -127,6 +129,41 @@ public class MatchingEngineService {
         ));
     }
 
+    private void publishOrderRejectedEvent(JsonNode result) {
+        JsonNode rejection = result.path("selfTradePrevention");
+        if (rejection.isMissingNode() || rejection.isNull()) {
+            return;
+        }
+
+        long rejectedQuantity = requiredLong(rejection, "rejectedQuantity");
+        if (rejectedQuantity <= 0) {
+            return;
+        }
+
+        UUID eventId = UUID.randomUUID();
+        JsonNode payload = objectMapper.valueToTree(new OrderRejectedOutboxPayload(
+                eventId,
+                UUID.fromString(requiredText(rejection, "orderId")),
+                requiredLong(rejection, "userId"),
+                requiredText(rejection, "stockCode"),
+                requiredText(rejection, "orderType"),
+                requiredLong(rejection, "price"),
+                rejectedQuantity,
+                requiredText(rejection, "reason"),
+                OffsetDateTime.now(ZoneOffset.UTC)
+        ));
+
+        outboxEventRepository.save(OutboxEvent.pending(
+                eventId,
+                AGGREGATE_TYPE_ORDER,
+                requiredText(rejection, "orderId"),
+                EVENT_TYPE_ORDER_REJECTED,
+                TRADE_EVENT_TOPIC,
+                requiredText(rejection, "stockCode"),
+                payload
+        ));
+    }
+
     private JsonNode parseResult(String matchResult) {
         try {
             return objectMapper.readTree(matchResult);
@@ -184,6 +221,19 @@ public class MatchingEngineService {
             long canceledQuantity,
             String clientCancelId,
             OffsetDateTime canceledAt
+    ) {
+    }
+
+    private record OrderRejectedOutboxPayload(
+            UUID rejectEventId,
+            UUID orderId,
+            long userId,
+            String stockCode,
+            String orderType,
+            long price,
+            long rejectedQuantity,
+            String reason,
+            OffsetDateTime rejectedAt
     ) {
     }
 }

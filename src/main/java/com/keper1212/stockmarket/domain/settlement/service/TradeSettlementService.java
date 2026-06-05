@@ -111,6 +111,37 @@ public class TradeSettlementService {
         return true;
     }
 
+    @Transactional
+    public boolean reject(JsonNode payload) {
+        UUID orderId = UUID.fromString(requiredText(payload, "orderId"));
+        long userId = requiredLong(payload, "userId");
+        String stockCode = requiredText(payload, "stockCode");
+        String orderType = requiredText(payload, "orderType");
+        long price = requiredLong(payload, "price");
+        long rejectedQuantity = requiredLong(payload, "rejectedQuantity");
+
+        if (rejectedQuantity <= 0) {
+            return false;
+        }
+
+        int updatedRows = orderRepository.completeReject(orderId, userId, rejectedQuantity);
+        if (updatedRows == 0) {
+            return false;
+        }
+
+        if (ORDER_TYPE_BUY.equals(orderType)) {
+            long unlockAmount = multiplyExact(price, rejectedQuantity);
+            assertUpdated(accountRepository.unlockCashByUserId(userId, unlockAmount), "거부된 매수 주문 예수금 잠금 해제에 실패했습니다.");
+        } else if (ORDER_TYPE_SELL.equals(orderType)) {
+            assertUpdated(userStockRepository.unlockQuantityByUserIdAndStockCode(userId, stockCode, rejectedQuantity), "거부된 매도 주문 보유수량 잠금 해제에 실패했습니다.");
+        } else {
+            throw new IllegalArgumentException("Unsupported rejected order type: " + orderType);
+        }
+
+        publishMarketSnapshotsAfterCommit(stockCode);
+        return true;
+    }
+
     private void publishRealtimeAfterCommit(TradeExecutedRealtimeMessage message) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             publishRealtime(message);

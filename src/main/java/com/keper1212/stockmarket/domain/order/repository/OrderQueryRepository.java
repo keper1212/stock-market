@@ -28,11 +28,24 @@ public class OrderQueryRepository {
                     o.price,
                     o.quantity,
                     o.remaining_quantity,
-                    (o.quantity - o.remaining_quantity) AS executed_quantity,
+                    COALESCE(executions.executed_quantity, 0) AS executed_quantity,
                     o.status,
                     o.accepted_at
                 FROM orders o
                 JOIN stocks s ON s.stock_code = o.stock_code
+                LEFT JOIN (
+                    SELECT order_id, SUM(trade_quantity)::BIGINT AS executed_quantity
+                    FROM (
+                        SELECT buy_order_id AS order_id, trade_quantity
+                        FROM trades
+                        WHERE buyer_id = ?
+                        UNION ALL
+                        SELECT sell_order_id AS order_id, trade_quantity
+                        FROM trades
+                        WHERE seller_id = ?
+                    ) user_trades
+                    GROUP BY order_id
+                ) executions ON executions.order_id = o.order_id
                 WHERE o.user_id = ?
                 ORDER BY o.accepted_at DESC
                 LIMIT ?
@@ -49,6 +62,8 @@ public class OrderQueryRepository {
                         rs.getString("status"),
                         rs.getObject("accepted_at", OffsetDateTime.class)
                 ),
+                userId,
+                userId,
                 userId,
                 HISTORY_LIMIT
         );

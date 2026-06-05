@@ -93,6 +93,7 @@ public class OrderBookService {
             local matchedCount = 0
             local totalMatchedQuantity = 0
             local trades = {}
+            local selfTradePrevention = nil
 
             while remainingQuantity > 0 do
                 local bestPriceRows
@@ -127,6 +128,7 @@ public class OrderBookService {
                     local oppositeOrderKey = 'order:' .. oppositeOrderId
                     local oppositeRemaining = tonumber(redis.call('HGET', oppositeOrderKey, 'remainingQuantity') or '0')
                     local oppositeStatus = redis.call('HGET', oppositeOrderKey, 'status')
+                    local oppositeUserId = redis.call('HGET', oppositeOrderKey, 'userId')
 
                     if oppositeRemaining <= 0 or oppositeStatus == 'CANCEL_REQUESTED' or oppositeStatus == 'CANCELED' then
                         redis.call('LPOP', oppositeOrdersKey)
@@ -135,6 +137,20 @@ public class OrderBookService {
                             redis.call('HSET', oppositeOrderKey, 'remainingQuantity', 0, 'status', 'CANCELED')
                         end
                         cleanup_price_level(KEYS[4], KEYS[2], oppositeVolumeField, oppositePriceText)
+                    elseif oppositeUserId == userId then
+                        local rejectedQuantity = remainingQuantity
+                        remainingQuantity = 0
+                        redis.call('HSET', KEYS[3], 'remainingQuantity', 0, 'status', 'REJECTED')
+                        selfTradePrevention = {
+                            orderId = orderId,
+                            userId = userId,
+                            stockCode = stockCode,
+                            orderType = orderType,
+                            price = price,
+                            rejectedQuantity = rejectedQuantity,
+                            reason = 'SELF_TRADE_PREVENTED'
+                        }
+                        break
                     else
                         local tradeQuantity = remainingQuantity
                         if oppositeRemaining < tradeQuantity then
@@ -215,7 +231,9 @@ public class OrderBookService {
             end
 
             local finalStatus = 'ACCEPTED'
-            if remainingQuantity == 0 then
+            if selfTradePrevention ~= nil then
+                finalStatus = 'REJECTED'
+            elseif remainingQuantity == 0 then
                 finalStatus = 'FILLED'
             elseif remainingQuantity < quantity then
                 finalStatus = 'PARTIALLY_FILLED'
@@ -234,7 +252,8 @@ public class OrderBookService {
                 matchedCount = matchedCount,
                 totalMatchedQuantity = totalMatchedQuantity,
                 remainingQuantity = remainingQuantity,
-                trades = trades
+                trades = trades,
+                selfTradePrevention = selfTradePrevention
             })
             """,
             String.class
