@@ -2,10 +2,13 @@ package com.keper1212.stockmarket.domain.marketdata.service;
 
 import com.keper1212.stockmarket.domain.marketdata.controller.dto.OrderBookLevelResponse;
 import com.keper1212.stockmarket.domain.marketdata.controller.dto.OrderBookResponse;
+import com.keper1212.stockmarket.domain.marketdata.controller.dto.StockChartPointResponse;
+import com.keper1212.stockmarket.domain.marketdata.controller.dto.StockChartResponse;
 import com.keper1212.stockmarket.domain.marketdata.controller.dto.StockSummaryResponse;
 import com.keper1212.stockmarket.domain.marketdata.controller.dto.StocksResponse;
 import com.keper1212.stockmarket.domain.marketdata.repository.StockMarketDataRepository;
 import com.keper1212.stockmarket.domain.marketdata.repository.StockMarketDataRepository.StockDashboardRow;
+import com.keper1212.stockmarket.domain.marketdata.repository.StockMarketDataRepository.StockChartRow;
 import com.keper1212.stockmarket.global.error.OrderException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -33,6 +36,7 @@ public class StockMarketDataService {
     private static final String ASK_KEY_PREFIX = "orderbook:ask:";
     private static final String VOLUME_KEY_PREFIX = "orderbook:volume:";
     private static final int DEFAULT_ORDERBOOK_DEPTH = 10;
+    private static final int DEFAULT_CHART_LIMIT = 300;
 
     private final StockMarketDataRepository stockMarketDataRepository;
     private final StringRedisTemplate stringRedisTemplate;
@@ -59,6 +63,20 @@ public class StockMarketDataService {
         );
     }
 
+
+    @Transactional(readOnly = true)
+    public StockChartResponse getChart(String stockCode) {
+        String normalizedStockCode = normalizeStockCode(stockCode);
+        if (stockMarketDataRepository.findCurrentPriceByStockCode(normalizedStockCode).isEmpty()) {
+            throw new OrderException(HttpStatus.NOT_FOUND, "거래 가능한 종목이 존재하지 않습니다.");
+        }
+
+        List<StockChartPointResponse> points = stockMarketDataRepository.findChartPointsByStockCode(normalizedStockCode, DEFAULT_CHART_LIMIT).stream()
+                .map(this::toChartPoint)
+                .toList();
+        return new StockChartResponse(normalizedStockCode, points);
+    }
+
     private StockSummaryResponse toResponse(StockDashboardRow row) {
         long changePrice = row.currentPrice() - row.basePrice();
         return new StockSummaryResponse(
@@ -71,6 +89,11 @@ public class StockMarketDataService {
                 row.tradeVolume(),
                 row.tradeAmount()
         );
+    }
+
+
+    private StockChartPointResponse toChartPoint(StockChartRow row) {
+        return new StockChartPointResponse(row.time(), row.price(), row.quantity());
     }
 
     private String changeDirection(long changePrice) {

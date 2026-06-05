@@ -1,6 +1,7 @@
 package com.keper1212.stockmarket.domain.marketdata.controller;
 
 import com.keper1212.stockmarket.domain.marketdata.controller.dto.OrderBookResponse;
+import com.keper1212.stockmarket.domain.marketdata.controller.dto.StockChartResponse;
 import com.keper1212.stockmarket.domain.marketdata.controller.dto.StocksResponse;
 import com.keper1212.stockmarket.domain.marketdata.service.StockMarketDataService;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,12 @@ public class StockMarketDataController {
     @GetMapping
     public ResponseEntity<StocksResponse> getStocks() {
         return ResponseEntity.ok(stockMarketDataService.getStocks());
+    }
+
+
+    @GetMapping("/{stockCode}/chart")
+    public ResponseEntity<StockChartResponse> getChart(@PathVariable("stockCode") String stockCode) {
+        return ResponseEntity.ok(stockMarketDataService.getChart(stockCode));
     }
 
     @GetMapping("/{stockCode}/orderbook")

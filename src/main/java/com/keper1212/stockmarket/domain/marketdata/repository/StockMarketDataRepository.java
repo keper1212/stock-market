@@ -1,5 +1,6 @@
 package com.keper1212.stockmarket.domain.marketdata.repository;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -79,6 +80,30 @@ public class StockMarketDataRepository {
         }
     }
 
+
+    public List<StockChartRow> findChartPointsByStockCode(String stockCode, int limit) {
+        return jdbcTemplate.query(
+                """
+                SELECT created_at, trade_price, trade_quantity
+                FROM (
+                    SELECT t.created_at, t.trade_price, t.trade_quantity
+                    FROM trades t
+                    WHERE t.stock_code = ?
+                    ORDER BY t.created_at DESC
+                    LIMIT ?
+                ) recent_trades
+                ORDER BY created_at ASC
+                """,
+                (rs, rowNum) -> new StockChartRow(
+                        rs.getObject("created_at", OffsetDateTime.class),
+                        rs.getLong("trade_price"),
+                        rs.getLong("trade_quantity")
+                ),
+                stockCode,
+                limit
+        );
+    }
+
     public record StockDashboardRow(
             String stockCode,
             String stockName,
@@ -88,4 +113,12 @@ public class StockMarketDataRepository {
             long tradeAmount
     ) {
     }
+
+    public record StockChartRow(
+            OffsetDateTime time,
+            long price,
+            long quantity
+    ) {
+    }
+
 }
