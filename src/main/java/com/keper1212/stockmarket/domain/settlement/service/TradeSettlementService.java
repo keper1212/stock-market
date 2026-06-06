@@ -158,19 +158,19 @@ public class TradeSettlementService {
 
     private void publishRealtime(TradeExecutedRealtimeMessage message) {
         realtimePublisher.publishTradeExecuted(message);
-        realtimePublisher.publishMarketSnapshots(message.stockCode());
+        realtimePublisher.requestMarketSnapshots(message.stockCode());
     }
 
     private void publishMarketSnapshotsAfterCommit(String stockCode) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            realtimePublisher.publishMarketSnapshots(stockCode);
+            realtimePublisher.requestMarketSnapshots(stockCode);
             return;
         }
 
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                realtimePublisher.publishMarketSnapshots(stockCode);
+                realtimePublisher.requestMarketSnapshots(stockCode);
             }
         });
     }

@@ -12,10 +12,10 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate # 이미 도커로 schema.sql을 주입했으므로 검증만 수행 (안전)
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
 
   # 2. Redis (초고속 캐시/전광판) 설정
   data:
@@ -76,6 +76,9 @@ app:
   kafka:
     consumer:
       enabled: ${KAFKA_CONSUMER_ENABLED}
+  realtime:
+    snapshot:
+      flush-interval-ms: ${REALTIME_SNAPSHOT_FLUSH_INTERVAL_MS:100}
 
 # 3. Kafka 자동설정은 일단 인프라 띄우기 전까지 주석 처리하거나 exclude에 남겨둘 수 있어.
 # 지금은 완전히 빈틈없이 인프라를 붙이기 위해 kafka 관련 exclude만 남기거나 

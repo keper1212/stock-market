@@ -34,9 +34,7 @@ public class MatchingEngineService {
         String matchResult = orderBookService.matchAcceptedOrder(payload);
         JsonNode result = parseResult(matchResult);
 
-        if (!hasTrades(result)) {
-            realtimePublisher.publishOrderBookSnapshot(stockCode);
-        }
+        realtimePublisher.requestMarketSnapshots(stockCode);
 
         publishTradeExecutedEvents(result);
         publishOrderRejectedEvent(result);
@@ -50,11 +48,6 @@ public class MatchingEngineService {
         return cancelResult;
     }
 
-
-    private boolean hasTrades(JsonNode result) {
-        JsonNode trades = result.path("trades");
-        return trades.isArray() && !trades.isEmpty();
-    }
 
     private void publishTradeExecutedEvents(JsonNode result) {
         JsonNode trades = result.path("trades");

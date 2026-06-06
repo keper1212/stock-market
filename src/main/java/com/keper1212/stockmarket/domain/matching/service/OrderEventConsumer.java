@@ -63,28 +63,26 @@ public class OrderEventConsumer {
 
     private void handleOrderAccepted(OrderEventMessage message, ConsumerRecord<String, String> record) {
         JsonNode payload = message.payload();
-        String matchResult = matchingEngineService.matchAcceptedOrder(payload);
-        log.info("ORDER_ACCEPTED consumed. eventId={}, orderId={}, stockCode={}, orderType={}, price={}, quantity={}, matchResult={}, partition={}, offset={}",
+        matchingEngineService.matchAcceptedOrder(payload);
+        log.debug("ORDER_ACCEPTED consumed. eventId={}, orderId={}, stockCode={}, orderType={}, price={}, quantity={}, partition={}, offset={}",
                 message.eventId(),
                 payload.path("orderId").asText(),
                 payload.path("stockCode").asText(),
                 payload.path("orderType").asText(),
                 payload.path("price").asLong(),
                 payload.path("quantity").asLong(),
-                matchResult,
                 record.partition(),
                 record.offset());
     }
 
     private void handleOrderCancelRequested(OrderEventMessage message, ConsumerRecord<String, String> record) {
         JsonNode payload = message.payload();
-        String cancelResult = matchingEngineService.cancelRequestedOrder(payload);
-        log.info("ORDER_CANCEL_REQUESTED consumed. eventId={}, orderId={}, stockCode={}, clientCancelId={}, cancelResult={}, partition={}, offset={}",
+        matchingEngineService.cancelRequestedOrder(payload);
+        log.debug("ORDER_CANCEL_REQUESTED consumed. eventId={}, orderId={}, stockCode={}, clientCancelId={}, partition={}, offset={}",
                 message.eventId(),
                 payload.path("orderId").asText(),
                 payload.path("stockCode").asText(),
                 payload.path("clientCancelId").asText(),
-                cancelResult,
                 record.partition(),
                 record.offset());
     }
