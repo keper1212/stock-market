@@ -1,38 +1,35 @@
 package com.keper1212.stockmarket.domain.settlement.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.keper1212.stockmarket.domain.marketdata.service.StockMarketDataService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.keper1212.stockmarket.domain.order.entity.OutboxEvent;
 import com.keper1212.stockmarket.domain.order.entity.Trade;
 import com.keper1212.stockmarket.domain.order.repository.OrderRepository;
+import com.keper1212.stockmarket.domain.order.repository.OutboxEventRepository;
 import com.keper1212.stockmarket.domain.order.repository.TradeRepository;
-import com.keper1212.stockmarket.domain.realtime.dto.TradeExecutedRealtimeMessage;
-import com.keper1212.stockmarket.domain.realtime.service.RealtimePublisher;
 import com.keper1212.stockmarket.domain.userservice.repository.AccountRepository;
 import com.keper1212.stockmarket.domain.userservice.repository.UserStockRepository;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 @RequiredArgsConstructor
 public class TradeSettlementService {
 
-    private static final Logger log = LoggerFactory.getLogger(TradeSettlementService.class);
-
     private static final String ORDER_TYPE_BUY = "BUY";
     private static final String ORDER_TYPE_SELL = "SELL";
+    private static final String AGGREGATE_TYPE_MARKET = "MARKET";
+    private static final String EVENT_TYPE_MARKET_TRADE_SETTLED = "MARKET_TRADE_SETTLED";
+    private static final String MARKET_EVENT_TOPIC = "market-events";
 
     private final TradeRepository tradeRepository;
     private final OrderRepository orderRepository;
     private final AccountRepository accountRepository;
     private final UserStockRepository userStockRepository;
-    private final RealtimePublisher realtimePublisher;
-    private final StockMarketDataService stockMarketDataService;
+    private final OutboxEventRepository outboxEventRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public boolean settle(JsonNode payload) {
@@ -75,14 +72,14 @@ public class TradeSettlementService {
                 tradePrice,
                 tradeQuantity
         ));
-        publishRealtimeAfterCommit(new TradeExecutedRealtimeMessage(
+        publishMarketTradeSettledEvent(
                 stockCode,
                 buyOrderId,
                 sellOrderId,
                 tradePrice,
                 tradeQuantity,
                 executedAt
-        ));
+        );
         return true;
     }
 
@@ -113,7 +110,6 @@ public class TradeSettlementService {
             throw new IllegalArgumentException("Unsupported canceled order type: " + orderType);
         }
 
-        publishMarketSnapshotsAfterCommit(stockCode);
         return true;
     }
 
@@ -144,51 +140,37 @@ public class TradeSettlementService {
             throw new IllegalArgumentException("Unsupported rejected order type: " + orderType);
         }
 
-        publishMarketSnapshotsAfterCommit(stockCode);
         return true;
     }
 
-    private void publishRealtimeAfterCommit(TradeExecutedRealtimeMessage message) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            publishRealtime(message);
-            return;
-        }
+    private void publishMarketTradeSettledEvent(
+            String stockCode,
+            UUID buyOrderId,
+            UUID sellOrderId,
+            long tradePrice,
+            long tradeQuantity,
+            String executedAt
+    ) {
+        UUID eventId = UUID.randomUUID();
+        JsonNode payload = objectMapper.valueToTree(new MarketTradeSettledOutboxPayload(
+                eventId,
+                stockCode,
+                buyOrderId,
+                sellOrderId,
+                tradePrice,
+                tradeQuantity,
+                executedAt
+        ));
 
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                publishRealtime(message);
-            }
-        });
-    }
-
-    private void publishRealtime(TradeExecutedRealtimeMessage message) {
-        recordMarketSnapshot(message);
-        realtimePublisher.publishTradeExecuted(message);
-        realtimePublisher.requestMarketSnapshots(message.stockCode());
-    }
-
-    private void recordMarketSnapshot(TradeExecutedRealtimeMessage message) {
-        try {
-            stockMarketDataService.recordTradeSnapshot(message.stockCode(), message.tradePrice(), message.tradeQuantity());
-        } catch (RuntimeException e) {
-            log.warn("Redis market snapshot update failed. stockCode={}, tradePrice={}, tradeQuantity={}, error={}",
-                    message.stockCode(), message.tradePrice(), message.tradeQuantity(), e.getMessage());
-        }
-    }
-
-    private void publishMarketSnapshotsAfterCommit(String stockCode) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            realtimePublisher.requestMarketSnapshots(stockCode);
-            return;
-        }
-
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                realtimePublisher.requestMarketSnapshots(stockCode);
-            }
-        });
+        outboxEventRepository.save(OutboxEvent.pending(
+                eventId,
+                AGGREGATE_TYPE_MARKET,
+                stockCode,
+                EVENT_TYPE_MARKET_TRADE_SETTLED,
+                MARKET_EVENT_TOPIC,
+                stockCode,
+                payload
+        ));
     }
 
     private long multiplyExact(long left, long right) {
@@ -203,6 +185,17 @@ public class TradeSettlementService {
         if (updatedRows == 0) {
             throw new IllegalStateException(message);
         }
+    }
+
+    private record MarketTradeSettledOutboxPayload(
+            UUID marketEventId,
+            String stockCode,
+            UUID buyOrderId,
+            UUID sellOrderId,
+            long tradePrice,
+            long tradeQuantity,
+            String executedAt
+    ) {
     }
 
     private String requiredText(JsonNode payload, String fieldName) {

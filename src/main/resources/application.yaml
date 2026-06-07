@@ -83,6 +83,12 @@ app:
       enabled: ${KAFKA_ORDER_CONSUMER_ENABLED:${KAFKA_CONSUMER_ENABLED:true}}
     trade-consumer:
       enabled: ${KAFKA_TRADE_CONSUMER_ENABLED:${KAFKA_CONSUMER_ENABLED:true}}
+    marketdata-consumer:
+      enabled: ${KAFKA_MARKETDATA_CONSUMER_ENABLED:${KAFKA_CONSUMER_ENABLED:true}}
+      group-id: ${KAFKA_MARKETDATA_CONSUMER_GROUP_ID:stockmarket-marketdata}
+    realtime-consumer:
+      enabled: ${KAFKA_REALTIME_CONSUMER_ENABLED:${KAFKA_CONSUMER_ENABLED:true}}
+      group-id: ${KAFKA_REALTIME_CONSUMER_GROUP_ID:stockmarket-realtime}
   realtime:
     snapshot:
       flush-interval-ms: ${REALTIME_SNAPSHOT_FLUSH_INTERVAL_MS:100}

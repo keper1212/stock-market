@@ -4,11 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.keper1212.stockmarket.domain.order.entity.OutboxEvent;
 import com.keper1212.stockmarket.domain.order.repository.OutboxEventRepository;
-import com.keper1212.stockmarket.domain.realtime.service.RealtimePublisher;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,17 +18,21 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MatchingEngineService {
 
+    private static final Logger log = LoggerFactory.getLogger(MatchingEngineService.class);
+
     private static final String AGGREGATE_TYPE_TRADE = "TRADE";
     private static final String AGGREGATE_TYPE_ORDER = "ORDER";
     private static final String EVENT_TYPE_TRADE_EXECUTED = "TRADE_EXECUTED";
     private static final String EVENT_TYPE_ORDER_CANCELED = "ORDER_CANCELED";
     private static final String EVENT_TYPE_ORDER_REJECTED = "ORDER_REJECTED";
+    private static final String EVENT_TYPE_MARKET_ORDERBOOK_CHANGED = "MARKET_ORDERBOOK_CHANGED";
     private static final String TRADE_EVENT_TOPIC = "trade-events";
+    private static final String MARKET_EVENT_TOPIC = "market-events";
 
     private final OrderBookService orderBookService;
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
-    private final RealtimePublisher realtimePublisher;
+    private final KafkaTemplate<String, String> kafkaTemplate;
 
     @Transactional
     public String matchAcceptedOrder(JsonNode payload) {
@@ -34,8 +40,7 @@ public class MatchingEngineService {
         String matchResult = orderBookService.matchAcceptedOrder(payload);
         JsonNode result = parseResult(matchResult);
 
-        realtimePublisher.requestMarketSnapshots(stockCode);
-
+        sendMarketOrderBookChangedEvent(stockCode);
         publishTradeExecutedEvents(result);
         publishOrderRejectedEvent(result);
         return matchResult;
@@ -45,9 +50,32 @@ public class MatchingEngineService {
     public String cancelRequestedOrder(JsonNode payload) {
         String cancelResult = orderBookService.cancelRequestedOrder(payload);
         publishOrderCanceledEvent(cancelResult);
+        JsonNode result = parseResult(cancelResult);
+        if ("CANCELED".equals(requiredText(result, "result"))) {
+            sendMarketOrderBookChangedEvent(requiredText(result, "stockCode"));
+        }
         return cancelResult;
     }
 
+
+    private void sendMarketOrderBookChangedEvent(String stockCode) {
+        try {
+            UUID eventId = UUID.randomUUID();
+            JsonNode payload = objectMapper.valueToTree(new MarketOrderBookChangedPayload(
+                    eventId,
+                    stockCode,
+                    OffsetDateTime.now(ZoneOffset.UTC)
+            ));
+            String message = objectMapper.writeValueAsString(new MarketKafkaMessage(
+                    eventId,
+                    EVENT_TYPE_MARKET_ORDERBOOK_CHANGED,
+                    payload
+            ));
+            kafkaTemplate.send(MARKET_EVENT_TOPIC, stockCode, message);
+        } catch (Exception e) {
+            log.warn("Market orderbook changed event publish failed. stockCode={}, error={}", stockCode, e.getMessage());
+        }
+    }
 
     private void publishTradeExecutedEvents(JsonNode result) {
         JsonNode trades = result.path("trades");
@@ -183,6 +211,20 @@ public class MatchingEngineService {
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid trade event field: " + fieldName, e);
         }
+    }
+
+    private record MarketKafkaMessage(
+            UUID eventId,
+            String eventType,
+            Object payload
+    ) {
+    }
+
+    private record MarketOrderBookChangedPayload(
+            UUID marketEventId,
+            String stockCode,
+            OffsetDateTime changedAt
+    ) {
     }
 
     private record TradeExecutedOutboxPayload(
