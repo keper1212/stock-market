@@ -10,6 +10,8 @@ BASE_DIR = Path(__file__).resolve().parent
 USERS_CSV = BASE_DIR / "users.csv"
 FALLBACK_STOCK_PRICES = {
     "HYU-MOTOR": 10000,
+    "SAM-ELEC": 5000,
+    "SK-HYNIX": 20000,
 }
 STOCK_CODES = list(FALLBACK_STOCK_PRICES.keys())
 PRICE_RANGE_RATE = 0.05
@@ -46,7 +48,7 @@ def random_quantity():
 
 
 class StockMarketUser(HttpUser):
-    wait_time = between(0.2, 1.0)
+    wait_time = between(3, 15)
 
     def on_start(self):
         self.access_token = None
@@ -92,11 +94,11 @@ class StockMarketUser(HttpUser):
         current_price = self.current_prices.get(stock_code, FALLBACK_STOCK_PRICES[stock_code])
         return random_price_from_current_price(current_price)
 
-    @task(1)
+    @task(70)
     def get_stocks(self):
         self.refresh_current_prices()
 
-    @task(1)
+    @task(25)
     def get_orderbook(self):
         stock_code = random.choice(STOCK_CODES)
         self.client.get(
@@ -104,7 +106,13 @@ class StockMarketUser(HttpUser):
             name="GET /api/v1/stocks/{stockCode}/orderbook",
         )
 
-    @task(4)
+    @task(5)
+    def place_order(self):
+        if random.random() < 0.5:
+            self.place_buy_order()
+        else:
+            self.place_sell_order()
+
     def place_buy_order(self):
         stock_code = random.choice(STOCK_CODES)
         self.client.post(
@@ -120,12 +128,8 @@ class StockMarketUser(HttpUser):
             name="POST /api/v1/orders BUY",
         )
 
-    @task(4)
     def place_sell_order(self):
-        if self.user.get("canSell", "false").lower() != "true":
-            return
-
-        stock_code = "HYU-MOTOR"
+        stock_code = random.choice(STOCK_CODES)
         self.client.post(
             "/api/v1/orders",
             json={

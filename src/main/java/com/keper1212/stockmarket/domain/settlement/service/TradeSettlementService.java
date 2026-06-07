@@ -1,6 +1,7 @@
 package com.keper1212.stockmarket.domain.settlement.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.keper1212.stockmarket.domain.marketdata.service.StockMarketDataService;
 import com.keper1212.stockmarket.domain.order.entity.Trade;
 import com.keper1212.stockmarket.domain.order.repository.OrderRepository;
 import com.keper1212.stockmarket.domain.order.repository.TradeRepository;
@@ -10,6 +11,8 @@ import com.keper1212.stockmarket.domain.userservice.repository.AccountRepository
 import com.keper1212.stockmarket.domain.userservice.repository.UserStockRepository;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -19,6 +22,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @RequiredArgsConstructor
 public class TradeSettlementService {
 
+    private static final Logger log = LoggerFactory.getLogger(TradeSettlementService.class);
+
     private static final String ORDER_TYPE_BUY = "BUY";
     private static final String ORDER_TYPE_SELL = "SELL";
 
@@ -27,6 +32,7 @@ public class TradeSettlementService {
     private final AccountRepository accountRepository;
     private final UserStockRepository userStockRepository;
     private final RealtimePublisher realtimePublisher;
+    private final StockMarketDataService stockMarketDataService;
 
     @Transactional
     public boolean settle(JsonNode payload) {
@@ -157,8 +163,18 @@ public class TradeSettlementService {
     }
 
     private void publishRealtime(TradeExecutedRealtimeMessage message) {
+        recordMarketSnapshot(message);
         realtimePublisher.publishTradeExecuted(message);
         realtimePublisher.requestMarketSnapshots(message.stockCode());
+    }
+
+    private void recordMarketSnapshot(TradeExecutedRealtimeMessage message) {
+        try {
+            stockMarketDataService.recordTradeSnapshot(message.stockCode(), message.tradePrice(), message.tradeQuantity());
+        } catch (RuntimeException e) {
+            log.warn("Redis market snapshot update failed. stockCode={}, tradePrice={}, tradeQuantity={}, error={}",
+                    message.stockCode(), message.tradePrice(), message.tradeQuantity(), e.getMessage());
+        }
     }
 
     private void publishMarketSnapshotsAfterCommit(String stockCode) {

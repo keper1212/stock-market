@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>STOMP Test</title>
+</head>
+<body>
+  <h1>STOMP Test</h1>
+  <pre id="log"></pre>
+
+  <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+  <script>
+    const log = (message) => {
+      document.getElementById("log").textContent += message + "\n";
+    };
+
+    let lastStocksReceivedAt = 0;
+    let lastOrderbookReceivedAt = 0;
+
+    const client = new StompJs.Client({
+      brokerURL: "ws://localhost:8080/ws",
+      debug: (str) => log(str),
+      reconnectDelay: 5000,
+      onConnect: () => {
+        log("CONNECTED");
+
+        client.subscribe("/topic/stocks", (message) => {
+          const now = performance.now();
+
+          if (lastStocksReceivedAt !== 0) {
+            log("stocks interval ms: " + (now - lastStocksReceivedAt).toFixed(1));
+          }
+
+          lastStocksReceivedAt = now;
+          log("[/topic/stocks] " + message.body);
+        });
+
+        client.subscribe("/topic/stocks/HYU-MOTOR/orderbook", (message) => {
+          const now = performance.now();
+
+          if (lastOrderbookReceivedAt !== 0) {
+            log("orderbook interval ms: " + (now - lastOrderbookReceivedAt).toFixed(1));
+          }
+
+          lastOrderbookReceivedAt = now;
+          log("[orderbook] " + message.body);
+        });
+      },
+      onStompError: (frame) => {
+        log("STOMP ERROR: " + frame.headers["message"]);
+      }
+    });
+
+    client.activate();
+  </script>
+</body>
+</html>

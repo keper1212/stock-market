@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "app.kafka.consumer", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "app.kafka.trade-consumer", name = "enabled", havingValue = "true")
 public class TradeEventConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(TradeEventConsumer.class);

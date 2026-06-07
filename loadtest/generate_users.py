@@ -53,8 +53,8 @@ def main():
     with users_csv.open("w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
         writer.writerow(["email", "password", "canSell"])
-        for index, (email, _) in enumerate(users, start=1):
-            writer.writerow([email, args.password, "true" if index <= seller_count else "false"])
+        for email, _ in users:
+            writer.writerow([email, args.password, "true"])
 
     values_sql = build_values(users)
     stock_sql = ""
@@ -135,7 +135,7 @@ COMMIT;
     print(f"Generated {users_csv}")
     print(f"Generated {BASE_DIR / 'seed_users.sql'}")
     print(f"Users: {args.count}")
-    print(f"Seller users: {seller_count}")
+    print(f"Seller users: {args.count}")
 
 
 if __name__ == "__main__":

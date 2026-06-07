@@ -1,3 +1,6 @@
+server:
+  port: ${SERVER_PORT:8080}
+
 spring:
   application:
     name: stockmarket
@@ -75,7 +78,11 @@ app:
       send-timeout-seconds: ${OUTBOX_PUBLISHER_SEND_TIMEOUT_SECONDS}
   kafka:
     consumer:
-      enabled: ${KAFKA_CONSUMER_ENABLED}
+      enabled: ${KAFKA_CONSUMER_ENABLED:true}
+    order-consumer:
+      enabled: ${KAFKA_ORDER_CONSUMER_ENABLED:${KAFKA_CONSUMER_ENABLED:true}}
+    trade-consumer:
+      enabled: ${KAFKA_TRADE_CONSUMER_ENABLED:${KAFKA_CONSUMER_ENABLED:true}}
   realtime:
     snapshot:
       flush-interval-ms: ${REALTIME_SNAPSHOT_FLUSH_INTERVAL_MS:100}
