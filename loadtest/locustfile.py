@@ -1,4 +1,5 @@
 import csv
+import os
 import random
 from pathlib import Path
 from uuid import uuid4
@@ -14,6 +15,7 @@ FALLBACK_STOCK_PRICES = {
     "SK-HYNIX": 20000,
 }
 STOCK_CODES = list(FALLBACK_STOCK_PRICES.keys())
+MARKETDATA_HOST = os.getenv("MARKETDATA_HOST", "").rstrip("/")
 PRICE_RANGE_RATE = 0.05
 PRICE_UNIT = 100
 MIN_ORDER_QUANTITY = 1
@@ -74,8 +76,13 @@ class StockMarketUser(HttpUser):
             return {}
         return {"Authorization": f"Bearer {self.access_token}"}
 
+    def marketdata_url(self, path):
+        if not MARKETDATA_HOST:
+            return path
+        return f"{MARKETDATA_HOST}{path}"
+
     def refresh_current_prices(self):
-        response = self.client.get("/api/v1/stocks", name="GET /api/v1/stocks")
+        response = self.client.get(self.marketdata_url("/api/v1/stocks"), name="GET /api/v1/stocks")
         if not response.ok:
             return
 
@@ -102,7 +109,7 @@ class StockMarketUser(HttpUser):
     def get_orderbook(self):
         stock_code = random.choice(STOCK_CODES)
         self.client.get(
-            f"/api/v1/stocks/{stock_code}/orderbook",
+            self.marketdata_url(f"/api/v1/stocks/{stock_code}/orderbook"),
             name="GET /api/v1/stocks/{stockCode}/orderbook",
         )
 

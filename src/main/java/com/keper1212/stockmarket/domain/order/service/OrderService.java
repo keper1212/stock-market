@@ -2,6 +2,10 @@ package com.keper1212.stockmarket.domain.order.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.keper1212.stockmarket.common.event.EventTypes;
+import com.keper1212.stockmarket.common.event.KafkaTopics;
+import com.keper1212.stockmarket.common.event.OrderAcceptedEvent;
+import com.keper1212.stockmarket.common.event.OrderCancelRequestedEvent;
 import com.keper1212.stockmarket.domain.order.controller.dto.OrderCancelRequest;
 import com.keper1212.stockmarket.domain.order.controller.dto.OrderCancelResponse;
 import com.keper1212.stockmarket.domain.order.controller.dto.OrderCreateRequest;
@@ -35,10 +39,10 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OrderService {
 
-    private static final String ORDER_EVENT_TOPIC = "order-events";
+    private static final String ORDER_EVENT_TOPIC = KafkaTopics.ORDER_EVENTS;
     private static final String AGGREGATE_TYPE_ORDER = "ORDER";
-    private static final String EVENT_TYPE_ORDER_ACCEPTED = "ORDER_ACCEPTED";
-    private static final String EVENT_TYPE_ORDER_CANCEL_REQUESTED = "ORDER_CANCEL_REQUESTED";
+    private static final String EVENT_TYPE_ORDER_ACCEPTED = EventTypes.ORDER_ACCEPTED;
+    private static final String EVENT_TYPE_ORDER_CANCEL_REQUESTED = EventTypes.ORDER_CANCEL_REQUESTED;
 
     private final UserRepository userRepository;
     private final AccountRepository accountRepository;
@@ -100,7 +104,7 @@ public class OrderService {
             return OrderCreateResponse.alreadyAccepted(duplicatedOrder.getOrderId(), duplicatedOrder.getAcceptedAt());
         }
 
-        JsonNode payload = objectMapper.valueToTree(new OrderAcceptedOutboxPayload(
+        JsonNode payload = objectMapper.valueToTree(new OrderAcceptedEvent(
                 orderId,
                 userId,
                 stockCode,
@@ -145,7 +149,7 @@ public class OrderService {
             throw new OrderException(HttpStatus.CONFLICT, "이미 체결되었거나 취소할 수 없는 주문입니다.");
         }
 
-        JsonNode payload = objectMapper.valueToTree(new OrderCancelRequestedOutboxPayload(
+        JsonNode payload = objectMapper.valueToTree(new OrderCancelRequestedEvent(
                 orderId,
                 userId,
                 order.getStockCode(),
@@ -207,25 +211,5 @@ public class OrderService {
         return clientCancelId.trim();
     }
 
-    private record OrderAcceptedOutboxPayload(
-            UUID orderId,
-            Long userId,
-            String stockCode,
-            String orderType,
-            long price,
-            long quantity,
-            long remainingQuantity,
-            String clientOrderId,
-            OffsetDateTime acceptedAt
-    ) {
-    }
 
-    private record OrderCancelRequestedOutboxPayload(
-            UUID orderId,
-            Long userId,
-            String stockCode,
-            String clientCancelId,
-            OffsetDateTime cancelRequestedAt
-    ) {
-    }
 }

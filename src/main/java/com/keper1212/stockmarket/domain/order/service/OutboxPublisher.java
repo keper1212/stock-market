@@ -2,12 +2,12 @@ package com.keper1212.stockmarket.domain.order.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.keper1212.stockmarket.common.event.OutboxKafkaMessage;
 import com.keper1212.stockmarket.domain.order.entity.OutboxEvent;
 import com.keper1212.stockmarket.domain.order.repository.OutboxEventRepository;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -53,7 +53,11 @@ public class OutboxPublisher {
 
     private void publish(OutboxEvent event) {
         try {
-            String message = objectMapper.writeValueAsString(OutboxKafkaMessage.from(event));
+            String message = objectMapper.writeValueAsString(new OutboxKafkaMessage(
+                    event.getEventId(),
+                    event.getEventType(),
+                    event.getPayload()
+            ));
             kafkaTemplate.send(event.getTopic(), event.getPartitionKey(), message)
                     .get(sendTimeoutSeconds, TimeUnit.SECONDS);
             event.markSent(OffsetDateTime.now(ZoneOffset.UTC));
@@ -72,18 +76,5 @@ public class OutboxPublisher {
         return cause.getClass().getSimpleName() + ": " + cause.getMessage();
     }
 
-    private record OutboxKafkaMessage(
-            UUID eventId,
-            String eventType,
-            Object payload
-    ) {
 
-        private static OutboxKafkaMessage from(OutboxEvent event) {
-            return new OutboxKafkaMessage(
-                    event.getEventId(),
-                    event.getEventType(),
-                    event.getPayload()
-            );
-        }
-    }
 }
