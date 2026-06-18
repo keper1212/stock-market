@@ -1,7 +1,11 @@
 rootProject.name = 'stockmarket'
 
 include 'common:event-contracts'
+include 'common:security-common'
 include 'services:matching-service'
 include 'services:settlement-service'
 include 'services:marketdata-service'
 include 'services:realtime-service'
+include 'services:order-service'
+include 'services:auth-service'
+include 'services:gateway-service'

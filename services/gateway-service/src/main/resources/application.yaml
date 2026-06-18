@@ -1,0 +1,25 @@
+server:
+  port: ${GATEWAY_SERVICE_PORT:8080}
+
+spring:
+  application:
+    name: gateway-service
+
+services:
+  auth:
+    uri: ${AUTH_SERVICE_URI:http://localhost:8087}
+  order:
+    uri: ${ORDER_SERVICE_URI:http://localhost:8082}
+  marketdata:
+    uri: ${MARKETDATA_SERVICE_URI:http://localhost:8085}
+  realtime:
+    ws-uri: ${REALTIME_SERVICE_WS_URI:ws://localhost:8086}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+  endpoint:
+    gateway:
+      access: read_only
