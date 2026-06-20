@@ -1,5 +1,8 @@
 server:
   port: ${AUTH_SERVICE_PORT:8087}
+  tomcat:
+    mbeanregistry:
+      enabled: true
 
 spring:
   application:

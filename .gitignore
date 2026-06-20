@@ -40,3 +40,5 @@ out/
 .gradle-local/
 
 schema_modify.sql
+
+AGENTS.md
