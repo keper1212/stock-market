@@ -18,7 +18,7 @@ public class AuthServiceSecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/health", "/api/v1/auth/**").permitAll()
+                        .requestMatchers("/actuator/**", "/api/v1/auth/**").permitAll()
                         .anyRequest().denyAll()
                 );
         return http.build();

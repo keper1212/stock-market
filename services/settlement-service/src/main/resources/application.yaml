@@ -31,3 +31,16 @@ app:
   kafka:
     trade-consumer:
       enabled: ${KAFKA_TRADE_CONSUMER_ENABLED:true}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}

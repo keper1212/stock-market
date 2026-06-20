@@ -40,3 +40,16 @@ app:
       fixed-delay-ms: ${OUTBOX_PUBLISHER_FIXED_DELAY_MS:100}
       batch-size: ${OUTBOX_PUBLISHER_BATCH_SIZE:200}
       send-timeout-seconds: ${OUTBOX_PUBLISHER_SEND_TIMEOUT_SECONDS:5}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}

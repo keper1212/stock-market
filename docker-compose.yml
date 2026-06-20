@@ -76,7 +76,257 @@ services:
       KAFKA_CLUSTERS_0_NAME: stockmarket
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: stock-kafka:19092
 
+
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE_MODULE: :services:auth-service
+        JAR_FILE: services/auth-service/build/libs/auth-service-0.0.1-SNAPSHOT.jar
+    container_name: stock-auth-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${AUTH_SERVICE_PORT:-8087}:8087"
+    environment:
+      AUTH_SERVICE_PORT: 8087
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_FROM: ${MAIL_FROM}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH}
+      MAIL_SMTP_STARTTLS_ENABLE: ${MAIL_SMTP_STARTTLS_ENABLE}
+      AUTH_EMAIL_CODE_TTL_SECONDS: ${AUTH_EMAIL_CODE_TTL_SECONDS}
+      AUTH_EMAIL_VERIFIED_TTL_SECONDS: ${AUTH_EMAIL_VERIFIED_TTL_SECONDS}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      AUTH_ACCESS_TOKEN_VALIDITY_SECONDS: ${AUTH_ACCESS_TOKEN_VALIDITY_SECONDS}
+      AUTH_REFRESH_TOKEN_VALIDITY_SECONDS: ${AUTH_REFRESH_TOKEN_VALIDITY_SECONDS}
+      AUTH_REFRESH_COOKIE_NAME: ${AUTH_REFRESH_COOKIE_NAME}
+      AUTH_REFRESH_COOKIE_SECURE: ${AUTH_REFRESH_COOKIE_SECURE}
+      AUTH_REFRESH_COOKIE_SAME_SITE: ${AUTH_REFRESH_COOKIE_SAME_SITE}
+
+  order-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE_MODULE: :services:order-service
+        JAR_FILE: services/order-service/build/libs/order-service-0.0.1-SNAPSHOT.jar
+    container_name: stock-order-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${ORDER_SERVICE_PORT:-8082}:8082"
+    environment:
+      ORDER_SERVICE_PORT: 8082
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      OUTBOX_PUBLISHER_ENABLED: ${OUTBOX_PUBLISHER_ENABLED:-true}
+      OUTBOX_PUBLISHER_FIXED_DELAY_MS: ${OUTBOX_PUBLISHER_FIXED_DELAY_MS:-100}
+      OUTBOX_PUBLISHER_BATCH_SIZE: ${OUTBOX_PUBLISHER_BATCH_SIZE:-200}
+      OUTBOX_PUBLISHER_SEND_TIMEOUT_SECONDS: ${OUTBOX_PUBLISHER_SEND_TIMEOUT_SECONDS:-5}
+
+  matching-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE_MODULE: :services:matching-service
+        JAR_FILE: services/matching-service/build/libs/matching-service-0.0.1-SNAPSHOT.jar
+    container_name: stock-matching-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${MATCHING_SERVICE_PORT:-8083}:8083"
+    environment:
+      MATCHING_SERVICE_PORT: 8083
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      KAFKA_CONSUMER_GROUP_ID: ${KAFKA_CONSUMER_GROUP_ID:-stockmarket-matching}
+      KAFKA_ORDER_CONSUMER_ENABLED: ${KAFKA_ORDER_CONSUMER_ENABLED:-true}
+
+  settlement-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE_MODULE: :services:settlement-service
+        JAR_FILE: services/settlement-service/build/libs/settlement-service-0.0.1-SNAPSHOT.jar
+    container_name: stock-settlement-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${SETTLEMENT_SERVICE_PORT:-8084}:8084"
+    environment:
+      SETTLEMENT_SERVICE_PORT: 8084
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      KAFKA_SETTLEMENT_CONSUMER_GROUP_ID: ${KAFKA_SETTLEMENT_CONSUMER_GROUP_ID:-stockmarket-settlement}
+      KAFKA_TRADE_CONSUMER_ENABLED: ${KAFKA_TRADE_CONSUMER_ENABLED:-true}
+
+  marketdata-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE_MODULE: :services:marketdata-service
+        JAR_FILE: services/marketdata-service/build/libs/marketdata-service-0.0.1-SNAPSHOT.jar
+    container_name: stock-marketdata-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${MARKETDATA_SERVICE_PORT:-8085}:8085"
+    environment:
+      MARKETDATA_SERVICE_PORT: 8085
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      KAFKA_MARKETDATA_CONSUMER_GROUP_ID: ${KAFKA_MARKETDATA_CONSUMER_GROUP_ID:-stockmarket-marketdata}
+      KAFKA_MARKETDATA_CONSUMER_ENABLED: ${KAFKA_MARKETDATA_CONSUMER_ENABLED:-true}
+
+  realtime-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE_MODULE: :services:realtime-service
+        JAR_FILE: services/realtime-service/build/libs/realtime-service-0.0.1-SNAPSHOT.jar
+    container_name: stock-realtime-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${REALTIME_SERVICE_PORT:-8086}:8086"
+    environment:
+      REALTIME_SERVICE_PORT: 8086
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      KAFKA_REALTIME_CONSUMER_GROUP_ID: ${KAFKA_REALTIME_CONSUMER_GROUP_ID:-stockmarket-realtime}
+      KAFKA_REALTIME_CONSUMER_ENABLED: ${KAFKA_REALTIME_CONSUMER_ENABLED:-true}
+      REALTIME_SNAPSHOT_FLUSH_INTERVAL_MS: ${REALTIME_SNAPSHOT_FLUSH_INTERVAL_MS:-100}
+
+  gateway-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE_MODULE: :services:gateway-service
+        JAR_FILE: services/gateway-service/build/libs/gateway-service-0.0.1-SNAPSHOT.jar
+    container_name: stock-gateway-service
+    restart: unless-stopped
+    depends_on:
+      - auth-service
+      - order-service
+      - marketdata-service
+      - realtime-service
+    ports:
+      - "${GATEWAY_SERVICE_PORT:-8080}:8080"
+    environment:
+      GATEWAY_SERVICE_PORT: 8080
+      AUTH_SERVICE_URI: http://auth-service:8087
+      ORDER_SERVICE_URI: http://order-service:8082
+      MARKETDATA_SERVICE_URI: http://marketdata-service:8085
+      REALTIME_SERVICE_WS_URI: ws://realtime-service:8086
+
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    container_name: stock-prometheus
+    restart: unless-stopped
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - stock_prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: stock-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - stock_grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+
 volumes:
   stock_postgres_data:
   stock_redis_data:
   stock_kafka_data:
+  stock_prometheus_data:
+  stock_grafana_data:

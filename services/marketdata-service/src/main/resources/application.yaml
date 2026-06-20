@@ -29,3 +29,16 @@ app:
     marketdata-consumer:
       enabled: ${KAFKA_MARKETDATA_CONSUMER_ENABLED:true}
       group-id: ${KAFKA_MARKETDATA_CONSUMER_GROUP_ID:stockmarket-marketdata}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}

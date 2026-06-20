@@ -1,0 +1,43 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: gateway-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['gateway-service:8080']
+
+  - job_name: auth-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['auth-service:8087']
+
+  - job_name: order-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['order-service:8082']
+
+  - job_name: matching-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['matching-service:8083']
+
+  - job_name: settlement-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['settlement-service:8084']
+
+  - job_name: marketdata-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['marketdata-service:8085']
+
+  - job_name: realtime-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['realtime-service:8086']

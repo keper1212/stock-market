@@ -32,3 +32,16 @@ app:
   realtime:
     snapshot:
       flush-interval-ms: ${REALTIME_SNAPSHOT_FLUSH_INTERVAL_MS:100}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}

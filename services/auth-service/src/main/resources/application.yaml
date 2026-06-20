@@ -49,3 +49,16 @@ app:
       refresh-cookie-name: ${AUTH_REFRESH_COOKIE_NAME}
       refresh-cookie-secure: ${AUTH_REFRESH_COOKIE_SECURE}
       refresh-cookie-same-site: ${AUTH_REFRESH_COOKIE_SAME_SITE}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}

@@ -1,0 +1,12 @@
+.git
+.gradle
+.gradle-local
+**/build
+build
+bin
+.env
+*.log
+.DS_Store
+loadtest/__pycache__
+stockmarket_frontend
+node_modules
