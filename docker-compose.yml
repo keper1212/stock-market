@@ -78,12 +78,12 @@ services:
 
 
 
-  auth-service:
+  auth-service-1: &auth-service-base
+    image: stockmarket/auth-service:local
     build:
       context: .
       dockerfile: Dockerfile.service
       args:
-        SERVICE_MODULE: :services:auth-service
         JAR_FILE: services/auth-service/build/libs/auth-service-0.0.1-SNAPSHOT.jar
     restart: unless-stopped
     depends_on:
@@ -118,12 +118,30 @@ services:
       AUTH_REFRESH_COOKIE_SECURE: ${AUTH_REFRESH_COOKIE_SECURE}
       AUTH_REFRESH_COOKIE_SAME_SITE: ${AUTH_REFRESH_COOKIE_SAME_SITE}
 
+  auth-service-2:
+    <<: *auth-service-base
+
+  auth-service-3:
+    <<: *auth-service-base
+
+  auth-lb:
+    image: nginx:1.27-alpine
+    container_name: stock-auth-lb
+    restart: unless-stopped
+    depends_on:
+      - auth-service-1
+      - auth-service-2
+      - auth-service-3
+    volumes:
+      - ./docker/nginx/auth-lb.conf:/etc/nginx/conf.d/default.conf:ro
+    expose:
+      - "8087"
+
   order-service:
     build:
       context: .
       dockerfile: Dockerfile.service
       args:
-        SERVICE_MODULE: :services:order-service
         JAR_FILE: services/order-service/build/libs/order-service-0.0.1-SNAPSHOT.jar
     container_name: stock-order-service
     restart: unless-stopped
@@ -153,7 +171,6 @@ services:
       context: .
       dockerfile: Dockerfile.service
       args:
-        SERVICE_MODULE: :services:matching-service
         JAR_FILE: services/matching-service/build/libs/matching-service-0.0.1-SNAPSHOT.jar
     container_name: stock-matching-service
     restart: unless-stopped
@@ -184,7 +201,6 @@ services:
       context: .
       dockerfile: Dockerfile.service
       args:
-        SERVICE_MODULE: :services:settlement-service
         JAR_FILE: services/settlement-service/build/libs/settlement-service-0.0.1-SNAPSHOT.jar
     container_name: stock-settlement-service
     restart: unless-stopped
@@ -211,7 +227,6 @@ services:
       context: .
       dockerfile: Dockerfile.service
       args:
-        SERVICE_MODULE: :services:marketdata-service
         JAR_FILE: services/marketdata-service/build/libs/marketdata-service-0.0.1-SNAPSHOT.jar
     container_name: stock-marketdata-service
     restart: unless-stopped
@@ -242,7 +257,6 @@ services:
       context: .
       dockerfile: Dockerfile.service
       args:
-        SERVICE_MODULE: :services:realtime-service
         JAR_FILE: services/realtime-service/build/libs/realtime-service-0.0.1-SNAPSHOT.jar
     container_name: stock-realtime-service
     restart: unless-stopped
@@ -274,12 +288,11 @@ services:
       context: .
       dockerfile: Dockerfile.service
       args:
-        SERVICE_MODULE: :services:gateway-service
         JAR_FILE: services/gateway-service/build/libs/gateway-service-0.0.1-SNAPSHOT.jar
     container_name: stock-gateway-service
     restart: unless-stopped
     depends_on:
-      - auth-service
+      - auth-lb
       - order-service
       - marketdata-service
       - realtime-service
@@ -287,7 +300,7 @@ services:
       - "${GATEWAY_SERVICE_PORT:-8080}:8080"
     environment:
       GATEWAY_SERVICE_PORT: 8080
-      AUTH_SERVICE_URI: http://auth-service:8087
+      AUTH_SERVICE_URI: http://auth-lb:8087
       ORDER_SERVICE_URI: http://order-service:8082
       MARKETDATA_SERVICE_URI: http://marketdata-service:8085
       REALTIME_SERVICE_WS_URI: ws://realtime-service:8086

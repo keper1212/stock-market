@@ -10,3 +10,6 @@ bin
 loadtest/__pycache__
 stockmarket_frontend
 node_modules
+!services/*/build
+!services/*/build/libs
+!services/*/build/libs/*.jar
