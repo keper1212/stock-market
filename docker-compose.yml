@@ -85,15 +85,14 @@ services:
       args:
         SERVICE_MODULE: :services:auth-service
         JAR_FILE: services/auth-service/build/libs/auth-service-0.0.1-SNAPSHOT.jar
-    container_name: stock-auth-service
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    ports:
-      - "${AUTH_SERVICE_PORT:-8087}:8087"
+    expose:
+      - "8087"
     environment:
       AUTH_SERVICE_PORT: 8087
       DB_HOST: postgres
