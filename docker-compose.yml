@@ -13,7 +13,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - stock_postgres_data:/var/lib/postgresql/data
-      - ./src/main/resources/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+      - ./db/init/001-schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_NAME}"]
       interval: 10s
@@ -78,7 +78,7 @@ services:
 
 
 
-  auth-service-1: &auth-service-base
+  auth-service:
     image: stockmarket/auth-service:local
     build:
       context: .
@@ -117,25 +117,6 @@ services:
       AUTH_REFRESH_COOKIE_NAME: ${AUTH_REFRESH_COOKIE_NAME}
       AUTH_REFRESH_COOKIE_SECURE: ${AUTH_REFRESH_COOKIE_SECURE}
       AUTH_REFRESH_COOKIE_SAME_SITE: ${AUTH_REFRESH_COOKIE_SAME_SITE}
-
-  auth-service-2:
-    <<: *auth-service-base
-
-  auth-service-3:
-    <<: *auth-service-base
-
-  auth-lb:
-    image: nginx:1.27-alpine
-    container_name: stock-auth-lb
-    restart: unless-stopped
-    depends_on:
-      - auth-service-1
-      - auth-service-2
-      - auth-service-3
-    volumes:
-      - ./docker/nginx/auth-lb.conf:/etc/nginx/conf.d/default.conf:ro
-    expose:
-      - "8087"
 
   order-service:
     build:
@@ -222,6 +203,39 @@ services:
       KAFKA_SETTLEMENT_CONSUMER_GROUP_ID: ${KAFKA_SETTLEMENT_CONSUMER_GROUP_ID:-stockmarket-settlement}
       KAFKA_TRADE_CONSUMER_ENABLED: ${KAFKA_TRADE_CONSUMER_ENABLED:-true}
 
+  asset-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        JAR_FILE: services/asset-service/build/libs/asset-service-0.0.1-SNAPSHOT.jar
+    container_name: stock-asset-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${ASSET_SERVICE_PORT:-8088}:8088"
+    environment:
+      ASSET_SERVICE_PORT: 8088
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      KAFKA_ASSET_CONSUMER_GROUP_ID: ${KAFKA_ASSET_CONSUMER_GROUP_ID:-stockmarket-asset}
+      KAFKA_ASSET_CONSUMER_ENABLED: ${KAFKA_ASSET_CONSUMER_ENABLED:-true}
+      ASSET_OUTBOX_PUBLISHER_ENABLED: ${ASSET_OUTBOX_PUBLISHER_ENABLED:-true}
+      ASSET_OUTBOX_PUBLISHER_FIXED_DELAY_MS: ${ASSET_OUTBOX_PUBLISHER_FIXED_DELAY_MS:-100}
+      ASSET_OUTBOX_PUBLISHER_BATCH_SIZE: ${ASSET_OUTBOX_PUBLISHER_BATCH_SIZE:-200}
+      ASSET_OUTBOX_PUBLISHER_SEND_TIMEOUT_SECONDS: ${ASSET_OUTBOX_PUBLISHER_SEND_TIMEOUT_SECONDS:-5}
+
   marketdata-service:
     build:
       context: .
@@ -292,7 +306,8 @@ services:
     container_name: stock-gateway-service
     restart: unless-stopped
     depends_on:
-      - auth-lb
+      - auth-service
+      - asset-service
       - order-service
       - marketdata-service
       - realtime-service
@@ -300,7 +315,8 @@ services:
       - "${GATEWAY_SERVICE_PORT:-8080}:8080"
     environment:
       GATEWAY_SERVICE_PORT: 8080
-      AUTH_SERVICE_URI: http://auth-lb:8087
+      AUTH_SERVICE_URI: http://auth-service:8087
+      ASSET_SERVICE_URI: http://asset-service:8088
       ORDER_SERVICE_URI: http://order-service:8082
       MARKETDATA_SERVICE_URI: http://marketdata-service:8085
       REALTIME_SERVICE_WS_URI: ws://realtime-service:8086

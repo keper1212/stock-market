@@ -18,6 +18,14 @@ spring:
         format_sql: false
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        delivery.timeout.ms: 120000
     consumer:
       group-id: ${KAFKA_SETTLEMENT_CONSUMER_GROUP_ID:stockmarket-settlement}
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -28,6 +36,12 @@ spring:
       ack-mode: manual
 
 app:
+  settlement-outbox:
+    publisher:
+      enabled: ${SETTLEMENT_OUTBOX_PUBLISHER_ENABLED:true}
+      fixed-delay-ms: ${SETTLEMENT_OUTBOX_PUBLISHER_FIXED_DELAY_MS:100}
+      batch-size: ${SETTLEMENT_OUTBOX_PUBLISHER_BATCH_SIZE:200}
+      send-timeout-seconds: ${SETTLEMENT_OUTBOX_PUBLISHER_SEND_TIMEOUT_SECONDS:5}
   kafka:
     trade-consumer:
       enabled: ${KAFKA_TRADE_CONSUMER_ENABLED:true}
@@ -43,4 +57,4 @@ management:
         enabled: true
   metrics:
     tags:
-      application: ${spring.application.name}
+        application: ${spring.application.name}

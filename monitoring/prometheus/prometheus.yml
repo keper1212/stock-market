@@ -32,6 +32,11 @@ scrape_configs:
     static_configs:
       - targets: ['settlement-service:8084']
 
+  - job_name: asset-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['asset-service:8088']
+
   - job_name: marketdata-service
     metrics_path: /actuator/prometheus
     static_configs:

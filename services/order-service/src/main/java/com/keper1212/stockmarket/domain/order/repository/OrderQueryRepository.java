@@ -35,15 +35,8 @@ public class OrderQueryRepository {
                 JOIN stocks s ON s.stock_code = o.stock_code
                 LEFT JOIN (
                     SELECT order_id, SUM(trade_quantity)::BIGINT AS executed_quantity
-                    FROM (
-                        SELECT buy_order_id AS order_id, trade_quantity
-                        FROM trades
-                        WHERE buyer_id = ?
-                        UNION ALL
-                        SELECT sell_order_id AS order_id, trade_quantity
-                        FROM trades
-                        WHERE seller_id = ?
-                    ) user_trades
+                    FROM order_trade_history
+                    WHERE user_id = ?
                     GROUP BY order_id
                 ) executions ON executions.order_id = o.order_id
                 WHERE o.user_id = ?
@@ -64,7 +57,6 @@ public class OrderQueryRepository {
                 ),
                 userId,
                 userId,
-                userId,
                 HISTORY_LIMIT
         );
     }
@@ -73,23 +65,23 @@ public class OrderQueryRepository {
         return jdbcTemplate.query(
                 """
                 SELECT
-                    t.trade_id,
+                    t.order_trade_history_id,
                     t.stock_code,
                     s.stock_name,
-                    CASE WHEN t.buyer_id = ? THEN 'BUY' ELSE 'SELL' END AS order_type,
-                    CASE WHEN t.buyer_id = ? THEN t.buy_order_id ELSE t.sell_order_id END AS order_id,
+                    t.order_type,
+                    t.order_id,
                     t.trade_price,
                     t.trade_quantity,
                     (t.trade_price * t.trade_quantity) AS trade_amount,
-                    t.created_at
-                FROM trades t
+                    t.executed_at
+                FROM order_trade_history t
                 JOIN stocks s ON s.stock_code = t.stock_code
-                WHERE t.buyer_id = ? OR t.seller_id = ?
-                ORDER BY t.created_at DESC
+                WHERE t.user_id = ?
+                ORDER BY t.executed_at DESC
                 LIMIT ?
                 """,
                 (rs, rowNum) -> new OrderHistoryTradeResponse(
-                        rs.getLong("trade_id"),
+                        rs.getLong("order_trade_history_id"),
                         rs.getString("stock_code"),
                         rs.getString("stock_name"),
                         rs.getString("order_type"),
@@ -97,11 +89,8 @@ public class OrderQueryRepository {
                         rs.getLong("trade_price"),
                         rs.getLong("trade_quantity"),
                         rs.getLong("trade_amount"),
-                        rs.getObject("created_at", OffsetDateTime.class)
+                        rs.getObject("executed_at", OffsetDateTime.class)
                 ),
-                userId,
-                userId,
-                userId,
                 userId,
                 HISTORY_LIMIT
         );

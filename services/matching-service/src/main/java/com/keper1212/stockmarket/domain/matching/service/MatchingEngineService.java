@@ -7,25 +7,19 @@ import com.keper1212.stockmarket.common.event.KafkaTopics;
 import com.keper1212.stockmarket.common.event.MarketOrderBookChangedEvent;
 import com.keper1212.stockmarket.common.event.OrderCanceledEvent;
 import com.keper1212.stockmarket.common.event.OrderRejectedEvent;
-import com.keper1212.stockmarket.common.event.OutboxKafkaMessage;
 import com.keper1212.stockmarket.common.event.TradeExecutedEvent;
-import com.keper1212.stockmarket.domain.order.entity.OutboxEvent;
-import com.keper1212.stockmarket.domain.order.repository.OutboxEventRepository;
+import com.keper1212.stockmarket.domain.matching.entity.MatchingOutboxEvent;
+import com.keper1212.stockmarket.domain.matching.repository.MatchingOutboxEventRepository;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class MatchingEngineService {
-
-    private static final Logger log = LoggerFactory.getLogger(MatchingEngineService.class);
 
     private static final String AGGREGATE_TYPE_TRADE = "TRADE";
     private static final String AGGREGATE_TYPE_ORDER = "ORDER";
@@ -37,9 +31,8 @@ public class MatchingEngineService {
     private static final String MARKET_EVENT_TOPIC = KafkaTopics.MARKET_EVENTS;
 
     private final OrderBookService orderBookService;
-    private final OutboxEventRepository outboxEventRepository;
+    private final MatchingOutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
-    private final KafkaTemplate<String, String> kafkaTemplate;
 
     @Transactional
     public String matchAcceptedOrder(JsonNode payload) {
@@ -47,7 +40,7 @@ public class MatchingEngineService {
         String matchResult = orderBookService.matchAcceptedOrder(payload);
         JsonNode result = parseResult(matchResult);
 
-        sendMarketOrderBookChangedEvent(stockCode);
+        publishMarketOrderBookChangedEvent(stockCode);
         publishTradeExecutedEvents(result);
         publishOrderRejectedEvent(result);
         return matchResult;
@@ -59,29 +52,28 @@ public class MatchingEngineService {
         publishOrderCanceledEvent(cancelResult);
         JsonNode result = parseResult(cancelResult);
         if ("CANCELED".equals(requiredText(result, "result"))) {
-            sendMarketOrderBookChangedEvent(requiredText(result, "stockCode"));
+            publishMarketOrderBookChangedEvent(requiredText(result, "stockCode"));
         }
         return cancelResult;
     }
 
 
-    private void sendMarketOrderBookChangedEvent(String stockCode) {
-        try {
-            UUID eventId = UUID.randomUUID();
-            JsonNode payload = objectMapper.valueToTree(new MarketOrderBookChangedEvent(
-                    eventId,
-                    stockCode,
-                    OffsetDateTime.now(ZoneOffset.UTC)
-            ));
-            String message = objectMapper.writeValueAsString(new OutboxKafkaMessage(
-                    eventId,
-                    EVENT_TYPE_MARKET_ORDERBOOK_CHANGED,
-                    payload
-            ));
-            kafkaTemplate.send(MARKET_EVENT_TOPIC, stockCode, message);
-        } catch (Exception e) {
-            log.warn("Market orderbook changed event publish failed. stockCode={}, error={}", stockCode, e.getMessage());
-        }
+    private void publishMarketOrderBookChangedEvent(String stockCode) {
+        UUID eventId = UUID.randomUUID();
+        JsonNode payload = objectMapper.valueToTree(new MarketOrderBookChangedEvent(
+                eventId,
+                stockCode,
+                OffsetDateTime.now(ZoneOffset.UTC)
+        ));
+        outboxEventRepository.save(MatchingOutboxEvent.pending(
+                eventId,
+                AGGREGATE_TYPE_ORDER,
+                stockCode,
+                EVENT_TYPE_MARKET_ORDERBOOK_CHANGED,
+                MARKET_EVENT_TOPIC,
+                stockCode,
+                payload
+        ));
     }
 
     private void publishTradeExecutedEvents(JsonNode result) {
@@ -110,7 +102,7 @@ public class MatchingEngineService {
                     OffsetDateTime.now(ZoneOffset.UTC)
             ));
 
-            outboxEventRepository.save(OutboxEvent.pending(
+            outboxEventRepository.save(MatchingOutboxEvent.pending(
                     eventId,
                     AGGREGATE_TYPE_TRADE,
                     eventId.toString(),
@@ -146,7 +138,7 @@ public class MatchingEngineService {
                 OffsetDateTime.parse(requiredText(result, "canceledAt"))
         ));
 
-        outboxEventRepository.save(OutboxEvent.pending(
+        outboxEventRepository.save(MatchingOutboxEvent.pending(
                 eventId,
                 AGGREGATE_TYPE_ORDER,
                 requiredText(result, "orderId"),
@@ -181,7 +173,7 @@ public class MatchingEngineService {
                 OffsetDateTime.now(ZoneOffset.UTC)
         ));
 
-        outboxEventRepository.save(OutboxEvent.pending(
+        outboxEventRepository.save(MatchingOutboxEvent.pending(
                 eventId,
                 AGGREGATE_TYPE_ORDER,
                 requiredText(rejection, "orderId"),

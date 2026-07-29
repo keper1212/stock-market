@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.keper1212.stockmarket.common.event.EventTypes;
 import com.keper1212.stockmarket.common.event.KafkaTopics;
-import com.keper1212.stockmarket.common.event.OrderAcceptedEvent;
+import com.keper1212.stockmarket.common.event.AssetHoldRequestedEvent;
 import com.keper1212.stockmarket.common.event.OrderCancelRequestedEvent;
 import com.keper1212.stockmarket.domain.order.controller.dto.OrderCancelRequest;
 import com.keper1212.stockmarket.domain.order.controller.dto.OrderCancelResponse;
@@ -14,16 +14,11 @@ import com.keper1212.stockmarket.domain.order.controller.dto.OrderHistoryRespons
 import com.keper1212.stockmarket.domain.order.entity.Order;
 import com.keper1212.stockmarket.domain.order.entity.OrderStatus;
 import com.keper1212.stockmarket.domain.order.entity.OrderType;
-import com.keper1212.stockmarket.domain.order.entity.OutboxEvent;
+import com.keper1212.stockmarket.domain.order.entity.OrderOutboxEvent;
 import com.keper1212.stockmarket.domain.order.repository.OrderRepository;
 import com.keper1212.stockmarket.domain.order.repository.OrderQueryRepository;
-import com.keper1212.stockmarket.domain.order.repository.OutboxEventRepository;
+import com.keper1212.stockmarket.domain.order.repository.OrderOutboxEventRepository;
 import com.keper1212.stockmarket.domain.order.repository.StockOrderValidationRepository;
-import com.keper1212.stockmarket.domain.userservice.entity.User;
-import com.keper1212.stockmarket.domain.userservice.repository.AccountRepository;
-import com.keper1212.stockmarket.domain.userservice.repository.UserRepository;
-import com.keper1212.stockmarket.domain.userservice.repository.UserStockRepository;
-import com.keper1212.stockmarket.global.error.AuthException;
 import com.keper1212.stockmarket.global.error.OrderException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -39,17 +34,15 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OrderService {
 
+    private static final String ASSET_COMMAND_TOPIC = KafkaTopics.ASSET_COMMANDS;
     private static final String ORDER_EVENT_TOPIC = KafkaTopics.ORDER_EVENTS;
     private static final String AGGREGATE_TYPE_ORDER = "ORDER";
-    private static final String EVENT_TYPE_ORDER_ACCEPTED = EventTypes.ORDER_ACCEPTED;
+    private static final String EVENT_TYPE_ASSET_HOLD_REQUESTED = EventTypes.ASSET_HOLD_REQUESTED;
     private static final String EVENT_TYPE_ORDER_CANCEL_REQUESTED = EventTypes.ORDER_CANCEL_REQUESTED;
 
-    private final UserRepository userRepository;
-    private final AccountRepository accountRepository;
-    private final UserStockRepository userStockRepository;
     private final OrderRepository orderRepository;
     private final OrderQueryRepository orderQueryRepository;
-    private final OutboxEventRepository outboxEventRepository;
+    private final OrderOutboxEventRepository outboxEventRepository;
     private final StockOrderValidationRepository stockOrderValidationRepository;
     private final ObjectMapper objectMapper;
 
@@ -65,13 +58,10 @@ public class OrderService {
     public OrderCreateResponse placeOrder(Long userId, OrderCreateRequest request) {
         String clientOrderId = normalizeClientOrderId(request.clientOrderId());
 
-        Order existingOrder = orderRepository.findByUser_UserIdAndClientOrderId(userId, clientOrderId).orElse(null);
+        Order existingOrder = orderRepository.findByUserIdAndClientOrderId(userId, clientOrderId).orElse(null);
         if (existingOrder != null) {
             return OrderCreateResponse.alreadyAccepted(existingOrder.getOrderId(), existingOrder.getAcceptedAt());
         }
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new AuthException(HttpStatus.UNAUTHORIZED, "사용자 정보가 존재하지 않습니다."));
 
         String stockCode = normalizeStockCode(request.stockCode());
         if (!stockOrderValidationRepository.isTradableStock(stockCode)) {
@@ -81,14 +71,12 @@ public class OrderService {
         long price = request.price();
         long quantity = request.quantity();
 
-        reserveResources(userId, request.orderType(), stockCode, price, quantity);
-
         OffsetDateTime acceptedAt = OffsetDateTime.now(ZoneOffset.UTC);
         UUID orderId = UUID.randomUUID();
 
-        Order order = Order.accept(
+        Order order = Order.pendingAssetHold(
                 orderId,
-                user,
+                userId,
                 stockCode,
                 clientOrderId,
                 request.orderType(),
@@ -99,30 +87,31 @@ public class OrderService {
         try {
             orderRepository.saveAndFlush(order);
         } catch (DataIntegrityViolationException e) {
-            Order duplicatedOrder = orderRepository.findByUser_UserIdAndClientOrderId(userId, clientOrderId)
+            Order duplicatedOrder = orderRepository.findByUserIdAndClientOrderId(userId, clientOrderId)
                     .orElseThrow(() -> new OrderException(HttpStatus.CONFLICT, "중복 주문 처리 중 충돌이 발생했습니다."));
             return OrderCreateResponse.alreadyAccepted(duplicatedOrder.getOrderId(), duplicatedOrder.getAcceptedAt());
         }
 
-        JsonNode payload = objectMapper.valueToTree(new OrderAcceptedEvent(
+        UUID holdRequestId = UUID.randomUUID();
+        JsonNode payload = objectMapper.valueToTree(new AssetHoldRequestedEvent(
+                holdRequestId,
                 orderId,
                 userId,
                 stockCode,
                 request.orderType().name(),
                 price,
                 quantity,
-                quantity,
                 clientOrderId,
                 acceptedAt
         ));
 
-        OutboxEvent outboxEvent = OutboxEvent.pending(
-                UUID.randomUUID(),
+        OrderOutboxEvent outboxEvent = OrderOutboxEvent.pending(
+                holdRequestId,
                 AGGREGATE_TYPE_ORDER,
                 orderId.toString(),
-                EVENT_TYPE_ORDER_ACCEPTED,
-                ORDER_EVENT_TOPIC,
-                stockCode,
+                EVENT_TYPE_ASSET_HOLD_REQUESTED,
+                ASSET_COMMAND_TOPIC,
+                orderId.toString(),
                 payload
         );
         outboxEventRepository.save(outboxEvent);
@@ -133,7 +122,7 @@ public class OrderService {
     @Transactional
     public OrderCancelResponse cancelOrder(Long userId, UUID orderId, OrderCancelRequest request) {
         String clientCancelId = normalizeClientCancelId(request.clientCancelId());
-        Order order = orderRepository.findByOrderIdAndUser_UserId(orderId, userId)
+        Order order = orderRepository.findByOrderIdAndUserId(orderId, userId)
                 .orElseThrow(() -> new OrderException(HttpStatus.NOT_FOUND, "취소할 주문이 존재하지 않습니다."));
 
         if (order.getStatus() == OrderStatus.CANCEL_REQUESTED) {
@@ -157,7 +146,7 @@ public class OrderService {
                 cancelRequestedAt
         ));
 
-        OutboxEvent outboxEvent = OutboxEvent.pending(
+        OrderOutboxEvent outboxEvent = OrderOutboxEvent.pending(
                 UUID.randomUUID(),
                 AGGREGATE_TYPE_ORDER,
                 orderId.toString(),
@@ -169,34 +158,6 @@ public class OrderService {
         outboxEventRepository.save(outboxEvent);
 
         return OrderCancelResponse.accepted(orderId, cancelRequestedAt);
-    }
-
-    private void reserveResources(Long userId, OrderType orderType, String stockCode, long price, long quantity) {
-        if (orderType == OrderType.BUY) {
-            if (!accountRepository.existsByUser_UserId(userId)) {
-                throw new OrderException(HttpStatus.NOT_FOUND, "계좌 정보가 존재하지 않습니다.");
-            }
-
-            long lockAmount = multiplyExact(price, quantity);
-            int updatedRows = accountRepository.lockCashByUserIdIfAvailable(userId, lockAmount);
-            if (updatedRows == 0) {
-                throw new OrderException(HttpStatus.UNPROCESSABLE_ENTITY, "예수금이 부족합니다.");
-            }
-            return;
-        }
-
-        int updatedRows = userStockRepository.lockQuantityByUserIdAndStockCodeIfAvailable(userId, stockCode, quantity);
-        if (updatedRows == 0) {
-            throw new OrderException(HttpStatus.UNPROCESSABLE_ENTITY, "보유 수량이 부족합니다.");
-        }
-    }
-
-    private long multiplyExact(long left, long right) {
-        try {
-            return Math.multiplyExact(left, right);
-        } catch (ArithmeticException e) {
-            throw new OrderException(HttpStatus.BAD_REQUEST, "주문 금액이 허용 범위를 초과했습니다.");
-        }
     }
 
     private String normalizeStockCode(String stockCode) {

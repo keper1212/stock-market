@@ -8,6 +8,8 @@ spring:
 services:
   auth:
     uri: ${AUTH_SERVICE_URI:http://localhost:8087}
+  asset:
+    uri: ${ASSET_SERVICE_URI:http://localhost:8088}
   order:
     uri: ${ORDER_SERVICE_URI:http://localhost:8082}
   marketdata:

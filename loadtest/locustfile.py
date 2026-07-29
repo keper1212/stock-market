@@ -101,11 +101,11 @@ class StockMarketUser(HttpUser):
         current_price = self.current_prices.get(stock_code, FALLBACK_STOCK_PRICES[stock_code])
         return random_price_from_current_price(current_price)
 
-    @task(70)
+    @task(10)
     def get_stocks(self):
         self.refresh_current_prices()
 
-    @task(25)
+    @task(10)
     def get_orderbook(self):
         stock_code = random.choice(STOCK_CODES)
         self.client.get(
@@ -113,7 +113,7 @@ class StockMarketUser(HttpUser):
             name="GET /api/v1/stocks/{stockCode}/orderbook",
         )
 
-    @task(5)
+    @task(80)
     def place_order(self):
         if random.random() < 0.5:
             self.place_buy_order()

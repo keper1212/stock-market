@@ -44,6 +44,12 @@ spring:
       ack-mode: manual
 
 app:
+  matching-outbox:
+    publisher:
+      enabled: ${MATCHING_OUTBOX_PUBLISHER_ENABLED:true}
+      fixed-delay-ms: ${MATCHING_OUTBOX_PUBLISHER_FIXED_DELAY_MS:100}
+      batch-size: ${MATCHING_OUTBOX_PUBLISHER_BATCH_SIZE:200}
+      send-timeout-seconds: ${MATCHING_OUTBOX_PUBLISHER_SEND_TIMEOUT_SECONDS:5}
   kafka:
     order-consumer:
       enabled: ${KAFKA_ORDER_CONSUMER_ENABLED:true}

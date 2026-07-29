@@ -1,14 +1,10 @@
 package com.keper1212.stockmarket.domain.order.entity;
 
-import com.keper1212.stockmarket.domain.userservice.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -24,9 +20,8 @@ public class Order {
     @Column(name = "order_id", nullable = false, updatable = false)
     private UUID orderId;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    @Column(name = "user_id", nullable = false)
+    private long userId;
 
     @Column(name = "stock_code", nullable = false, length = 20)
     private String stockCode;
@@ -71,7 +66,7 @@ public class Order {
 
     private Order(
             UUID orderId,
-            User user,
+            long userId,
             String stockCode,
             String clientOrderId,
             OrderType orderType,
@@ -82,7 +77,7 @@ public class Order {
             OffsetDateTime acceptedAt
     ) {
         this.orderId = orderId;
-        this.user = user;
+        this.userId = userId;
         this.stockCode = stockCode;
         this.clientOrderId = clientOrderId;
         this.orderType = orderType;
@@ -93,9 +88,9 @@ public class Order {
         this.acceptedAt = acceptedAt;
     }
 
-    public static Order accept(
+    public static Order pendingAssetHold(
             UUID orderId,
-            User user,
+            long userId,
             String stockCode,
             String clientOrderId,
             OrderType orderType,
@@ -105,14 +100,14 @@ public class Order {
     ) {
         return new Order(
                 orderId,
-                user,
+                userId,
                 stockCode,
                 clientOrderId,
                 orderType,
                 price,
                 quantity,
                 quantity,
-                OrderStatus.ACCEPTED,
+                OrderStatus.PENDING_ASSET_HOLD,
                 acceptedAt
         );
     }

@@ -11,9 +11,9 @@ import org.springframework.data.repository.query.Param;
 
 public interface OrderRepository extends JpaRepository<Order, UUID> {
 
-    Optional<Order> findByUser_UserIdAndClientOrderId(Long userId, String clientOrderId);
+    Optional<Order> findByUserIdAndClientOrderId(Long userId, String clientOrderId);
 
-    Optional<Order> findByOrderIdAndUser_UserId(UUID orderId, Long userId);
+    Optional<Order> findByOrderIdAndUserId(UUID orderId, Long userId);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
@@ -48,6 +48,27 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
             @Param("remainingQuantity") long remainingQuantity,
             @Param("status") String status
     );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE orders
+            SET status = 'ACCEPTED',
+                updated_at = NOW()
+            WHERE order_id = :orderId
+              AND status = 'PENDING_ASSET_HOLD'
+            """, nativeQuery = true)
+    int acceptAfterAssetHold(@Param("orderId") UUID orderId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE orders
+            SET remaining_quantity = 0,
+                status = 'REJECTED',
+                updated_at = NOW()
+            WHERE order_id = :orderId
+              AND status = 'PENDING_ASSET_HOLD'
+            """, nativeQuery = true)
+    int rejectAfterAssetHold(@Param("orderId") UUID orderId);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """

@@ -29,6 +29,13 @@ spring:
       properties:
         enable.idempotence: true
         delivery.timeout.ms: 120000
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: latest
+      enable-auto-commit: false
+    listener:
+      ack-mode: manual
 
 app:
   auth:
@@ -40,6 +47,10 @@ app:
       fixed-delay-ms: ${OUTBOX_PUBLISHER_FIXED_DELAY_MS:100}
       batch-size: ${OUTBOX_PUBLISHER_BATCH_SIZE:200}
       send-timeout-seconds: ${OUTBOX_PUBLISHER_SEND_TIMEOUT_SECONDS:5}
+  kafka:
+    order-lifecycle-consumer:
+      enabled: ${KAFKA_ORDER_LIFECYCLE_CONSUMER_ENABLED:true}
+      group-id: ${KAFKA_ORDER_LIFECYCLE_CONSUMER_GROUP_ID:stockmarket-order-lifecycle}
 
 management:
   endpoints:
